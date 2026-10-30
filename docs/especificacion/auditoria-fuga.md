@@ -33,7 +33,12 @@ cd web
 
 Los tests citados deben pasar. Cualquier cambio en `dataset.py`, `contexto.py`, `evaluacion.particion` o `modulo.historico_abstractas` obliga a revisar esta tabla.
 
+## Foto de la simulación (A-06)
+
+`python manage.py snapshot_consulta --guardar` guarda una foto de `consulta_general` para 2018 y 1986 (116 partidos: 64 + 52) usando los resultados reales de la fase de grupos. `--verificar` vuelve a simular y compara partido a partido; falla si el refactor cambia un marcador. La foto está en `experimentos/snapshot_consulta.json` y se comprobó dos veces: la primera para guardar y la segunda con `--verificar` (OK).
+
+Esta foto es la red de seguridad de H.2, no una prueba de fuga: usa resultados reales de grupos como entrada, igual que el modo "¿qué hubiera pasado si…?" de la app.
+
 ## Pendiente
 
-- Test de integración de `consulta_general` para 2018/1986 (A-06), que también sirve de red para el refactor H.2.
-- Test de que la simulación no usa el marcador real del partido que está prediciendo (hoy la evidencia es lectura de código).
+- Test de que la simulación no usa el marcador real del partido que está prediciendo (hoy la evidencia es lectura de código; la foto de A-06 no lo demuestra).

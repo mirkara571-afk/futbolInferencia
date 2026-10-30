@@ -1,0 +1,709 @@
+{
+  "fecha": "2026-10-30",
+  "anios": [
+    1986,
+    2018
+  ],
+  "partidos": {
+    "1986": [
+      {
+        "home": "Bulgaria",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Italia"
+      },
+      {
+        "home": "Argentina",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Corea del Sur"
+      },
+      {
+        "home": "Italia",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Argentina"
+      },
+      {
+        "home": "Corea del Sur",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Bulgaria"
+      },
+      {
+        "home": "Corea del Sur",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Italia"
+      },
+      {
+        "home": "Argentina",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Bulgaria"
+      },
+      {
+        "home": "Bélgica",
+        "score_0": 0,
+        "score_1": 2,
+        "away": "México"
+      },
+      {
+        "home": "Paraguay",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Irak"
+      },
+      {
+        "home": "México",
+        "score_0": 2,
+        "score_1": 0,
+        "away": "Paraguay"
+      },
+      {
+        "home": "Irak",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Bélgica"
+      },
+      {
+        "home": "Paraguay",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Bélgica"
+      },
+      {
+        "home": "Irak",
+        "score_0": 0,
+        "score_1": 2,
+        "away": "México"
+      },
+      {
+        "home": "Canadá",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Francia"
+      },
+      {
+        "home": "Rusia",
+        "score_0": 2,
+        "score_1": 1,
+        "away": "Hungría"
+      },
+      {
+        "home": "Francia",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Rusia"
+      },
+      {
+        "home": "Hungría",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Canadá"
+      },
+      {
+        "home": "Hungría",
+        "score_0": 1,
+        "score_1": 2,
+        "away": "Francia"
+      },
+      {
+        "home": "Rusia",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Canadá"
+      },
+      {
+        "home": "España",
+        "score_0": 1,
+        "score_1": 2,
+        "away": "Brasil"
+      },
+      {
+        "home": "Argelia",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Irlanda del Norte"
+      },
+      {
+        "home": "Brasil",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Argelia"
+      },
+      {
+        "home": "Irlanda del Norte",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "España"
+      },
+      {
+        "home": "Irlanda del Norte",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Brasil"
+      },
+      {
+        "home": "Argelia",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "España"
+      },
+      {
+        "home": "Uruguay",
+        "score_0": 1,
+        "score_1": 2,
+        "away": "Alemania"
+      },
+      {
+        "home": "Escocia",
+        "score_0": 1,
+        "score_1": 1,
+        "away": "Dinamarca"
+      },
+      {
+        "home": "Alemania",
+        "score_0": 2,
+        "score_1": 1,
+        "away": "Escocia"
+      },
+      {
+        "home": "Dinamarca",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Uruguay"
+      },
+      {
+        "home": "Dinamarca",
+        "score_0": 1,
+        "score_1": 2,
+        "away": "Alemania"
+      },
+      {
+        "home": "Escocia",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Uruguay"
+      },
+      {
+        "home": "Marruecos",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Polonia"
+      },
+      {
+        "home": "Portugal",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Inglaterra"
+      },
+      {
+        "home": "Inglaterra",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Marruecos"
+      },
+      {
+        "home": "Polonia",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Portugal"
+      },
+      {
+        "home": "Inglaterra",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Polonia"
+      },
+      {
+        "home": "Portugal",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Marruecos"
+      },
+      {
+        "home": "Italia",
+        "score_0": 2,
+        "score_1": 1,
+        "away": "Hungría"
+      },
+      {
+        "home": "Inglaterra",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Uruguay"
+      },
+      {
+        "home": "Argentina",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Rusia"
+      },
+      {
+        "home": "México",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Irlanda del Norte"
+      },
+      {
+        "home": "Francia",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Corea del Sur"
+      },
+      {
+        "home": "Portugal",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Bélgica"
+      },
+      {
+        "home": "Alemania",
+        "score_0": 2,
+        "score_1": 1,
+        "away": "España"
+      },
+      {
+        "home": "Brasil",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Polonia"
+      },
+      {
+        "home": "Rusia",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Francia"
+      },
+      {
+        "home": "Portugal",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Italia"
+      },
+      {
+        "home": "México",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Alemania"
+      },
+      {
+        "home": "Brasil",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Inglaterra"
+      },
+      {
+        "home": "Francia",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Italia"
+      },
+      {
+        "home": "México",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Brasil"
+      },
+      {
+        "home": "Italia",
+        "score_0": 1,
+        "score_1": 1,
+        "away": "Brasil"
+      },
+      {
+        "home": "México",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Francia"
+      }
+    ],
+    "2018": [
+      {
+        "home": "Rusia",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Arabia Saudita"
+      },
+      {
+        "home": "Egipto",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Uruguay"
+      },
+      {
+        "home": "Rusia",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Egipto"
+      },
+      {
+        "home": "Uruguay",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Arabia Saudita"
+      },
+      {
+        "home": "Uruguay",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Rusia"
+      },
+      {
+        "home": "Arabia Saudita",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Egipto"
+      },
+      {
+        "home": "Marruecos",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Irán"
+      },
+      {
+        "home": "Portugal",
+        "score_0": 1,
+        "score_1": 2,
+        "away": "España"
+      },
+      {
+        "home": "Portugal",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Marruecos"
+      },
+      {
+        "home": "Irán",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "España"
+      },
+      {
+        "home": "Irán",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Portugal"
+      },
+      {
+        "home": "España",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Marruecos"
+      },
+      {
+        "home": "Francia",
+        "score_0": 2,
+        "score_1": 1,
+        "away": "Australia"
+      },
+      {
+        "home": "Perú",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Dinamarca"
+      },
+      {
+        "home": "Dinamarca",
+        "score_0": 1,
+        "score_1": 2,
+        "away": "Australia"
+      },
+      {
+        "home": "Francia",
+        "score_0": 2,
+        "score_1": 1,
+        "away": "Perú"
+      },
+      {
+        "home": "Dinamarca",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Francia"
+      },
+      {
+        "home": "Australia",
+        "score_0": 2,
+        "score_1": 1,
+        "away": "Perú"
+      },
+      {
+        "home": "Argentina",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Islandia"
+      },
+      {
+        "home": "Croacia",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Nigeria"
+      },
+      {
+        "home": "Argentina",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Croacia"
+      },
+      {
+        "home": "Nigeria",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Islandia"
+      },
+      {
+        "home": "Nigeria",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Argentina"
+      },
+      {
+        "home": "Islandia",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Croacia"
+      },
+      {
+        "home": "Costa Rica",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Serbia"
+      },
+      {
+        "home": "Brasil",
+        "score_0": 2,
+        "score_1": 1,
+        "away": "Suiza"
+      },
+      {
+        "home": "Brasil",
+        "score_0": 2,
+        "score_1": 0,
+        "away": "Costa Rica"
+      },
+      {
+        "home": "Serbia",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Suiza"
+      },
+      {
+        "home": "Serbia",
+        "score_0": 0,
+        "score_1": 2,
+        "away": "Brasil"
+      },
+      {
+        "home": "Suiza",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Costa Rica"
+      },
+      {
+        "home": "Alemania",
+        "score_0": 2,
+        "score_1": 1,
+        "away": "México"
+      },
+      {
+        "home": "Suecia",
+        "score_0": 2,
+        "score_1": 1,
+        "away": "Corea del Sur"
+      },
+      {
+        "home": "Corea del Sur",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "México"
+      },
+      {
+        "home": "Alemania",
+        "score_0": 2,
+        "score_1": 1,
+        "away": "Suecia"
+      },
+      {
+        "home": "Corea del Sur",
+        "score_0": 1,
+        "score_1": 2,
+        "away": "Alemania"
+      },
+      {
+        "home": "México",
+        "score_0": 2,
+        "score_1": 1,
+        "away": "Suecia"
+      },
+      {
+        "home": "Bélgica",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Panamá"
+      },
+      {
+        "home": "Túnez",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Inglaterra"
+      },
+      {
+        "home": "Bélgica",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Túnez"
+      },
+      {
+        "home": "Inglaterra",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Panamá"
+      },
+      {
+        "home": "Inglaterra",
+        "score_0": 2,
+        "score_1": 1,
+        "away": "Bélgica"
+      },
+      {
+        "home": "Panamá",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Túnez"
+      },
+      {
+        "home": "Colombia",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Japón"
+      },
+      {
+        "home": "Polonia",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Senegal"
+      },
+      {
+        "home": "Japón",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Senegal"
+      },
+      {
+        "home": "Polonia",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Colombia"
+      },
+      {
+        "home": "Japón",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Polonia"
+      },
+      {
+        "home": "Senegal",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Colombia"
+      },
+      {
+        "home": "Francia",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Croacia"
+      },
+      {
+        "home": "Rusia",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Portugal"
+      },
+      {
+        "home": "España",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Uruguay"
+      },
+      {
+        "home": "Argentina",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Australia"
+      },
+      {
+        "home": "Brasil",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "México"
+      },
+      {
+        "home": "Inglaterra",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Japón"
+      },
+      {
+        "home": "Alemania",
+        "score_0": 2,
+        "score_1": 1,
+        "away": "Suiza"
+      },
+      {
+        "home": "Colombia",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Bélgica"
+      },
+      {
+        "home": "Rusia",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Francia"
+      },
+      {
+        "home": "Brasil",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Inglaterra"
+      },
+      {
+        "home": "Alemania",
+        "score_0": 1,
+        "score_1": 0,
+        "away": "Colombia"
+      },
+      {
+        "home": "España",
+        "score_0": 1,
+        "score_1": 1,
+        "away": "Argentina"
+      },
+      {
+        "home": "Francia",
+        "score_0": 0,
+        "score_1": 1,
+        "away": "Brasil"
+      },
+      {
+        "home": "Argentina",
+        "score_0": 1,
+        "score_1": 2,
+        "away": "Alemania"
+      },
+      {
+        "home": "Francia",
+        "score_0": 1,
+        "score_1": 1,
+        "away": "Argentina"
+      },
+      {
+        "home": "Brasil",
+        "score_0": 2,
+        "score_1": 1,
+        "away": "Alemania"
+      }
+    ]
+  }
+}
