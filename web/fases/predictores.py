@@ -400,10 +400,14 @@ def cargar_predictor(carpeta):
   if esquema.get("backend") == PredictorKeras.nombre and esquema.get("version_metricas", 1) != VERSION_METRICAS:
     raise ValueError(f"{carpeta.name} se entreno con la version {esquema.get('version_metricas', 1)} de las metricas y el codigo usa la {VERSION_METRICAS}; hay que reentrenarlo")
   if esquema.get("backend") not in REGISTRO:
-    # los backends de la Etapa B se registran al importar su modulo; se hace aqui de forma perezosa para no
-    # crear un ciclo predictores -> modelos_estadisticos -> predictores al cargar el paquete
+    # los backends de las Etapas B y C se registran al importar sus modulos; se hace aqui de forma perezosa para no
+    # crear un ciclo predictores -> modelos -> predictores al cargar el paquete
+    from .ensamble import PredictorEnsamble
+    from .modelos_arboles import PREDICTORES as _PREDICTORES_ARBOLES
     from .modelos_estadisticos import PREDICTORES as _PREDICTORES_ESTADISTICOS
     REGISTRO.update(_PREDICTORES_ESTADISTICOS)
+    REGISTRO.update(_PREDICTORES_ARBOLES)
+    REGISTRO[PredictorEnsamble.nombre] = PredictorEnsamble.desde_esquema
   if esquema.get("backend") not in REGISTRO:
     raise ValueError(f"Backend desconocido {esquema.get('backend')!r}; registrados: {sorted(REGISTRO)}")
   return REGISTRO[esquema["backend"]](esquema, carpeta), esquema

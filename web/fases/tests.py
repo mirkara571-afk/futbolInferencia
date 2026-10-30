@@ -8,7 +8,9 @@ from django.test import SimpleTestCase
 
 from .dataset import CATEGORIAS, CICLO_INTERNACIONALES, N_CONTEXTO, construir_dataset, construir_secuencias, mapa_paises
 from .modulo import ALL_METRICS, BASE_METRICS, COLS_MODELO_POR_EQUIPO, METRICAS_ABSTRACTAS, OPTIONAL_METRICS, historico_abstractas
-from .evaluacion import comparar, ece, intervalos_bootstrap, metricas, metricas_por_partido, metricas_probabilidad, particion, probabilidades_deterministas, tabla_calibracion
+from .ensamble import PredictorEnsamble
+from .evaluacion import comparar, decision_acierto, decision_rps, ece, intervalos_bootstrap, metricas, metricas_por_partido, metricas_probabilidad, particion, probabilidades_deterministas, tabla_calibracion
+from .modelos_arboles import PredictorLightGBMMulticlase, PredictorLightGBMPoisson, PredictorRandomForest
 from .modelos_estadisticos import PredictorDixonColes, PredictorOrdinal, PredictorPoissonGLM
 from .predictores import Lote, PredictorElo, PredictorEmpate, PredictorKeras, PredictorMasPuntos, PredictorMedias, cargar_predictor, guardar_predictor, lote_desde_entrada
 
@@ -307,6 +309,14 @@ class EvaluacionTests(SimpleTestCase):
     # y "metricas" lo incluye para que viaje en el JSON de evaluacion
     self.assertIn("ece", metricas([[1, 0]], [[1.2, 0.8]]))
 
+  def test_decision_rps_puede_elegir_empate(self):
+    # 40 / 35 / 25: el argmax dice local, pero el RPS esperado prefiere empate porque castiga menos el orden
+    self.assertEqual(decision_acierto([[0.40, 0.35, 0.25]]).tolist(), [1])
+    self.assertEqual(decision_rps([[0.40, 0.35, 0.25]]).tolist(), [0])
+    # con un favorito claro, las dos reglas coinciden
+    self.assertEqual(decision_rps([[0.80, 0.15, 0.05]]).tolist(), [1])
+    self.assertEqual(decision_acierto([[0.80, 0.15, 0.05]]).tolist(), [1])
+
   def test_metricas_es_la_media_por_partido(self):
     goles, lambdas = [[2, 1], [0, 0], [1, 3]], [[1.5, 0.8], [1.0, 1.2], [0.9, 1.6]]
     r = metricas(goles, lambdas)
@@ -422,6 +432,64 @@ class ModelosEstadisticosTests(SimpleTestCase):
       self.assertEqual(esquema["backend"], "dixon_coles")
       np.testing.assert_allclose(cargado.probabilidades(Lote(self.ds)), probs, rtol=1e-10)
       np.testing.assert_allclose(cargado.predecir(Lote(self.ds)), salida, rtol=1e-10)
+
+
+class ModelosArbolesTests(SimpleTestCase):
+  """Etapa C: contrato, formas, probabilidades y roundtrip de LightGBM y Random Forest"""
+
+  def setUp(self):
+    self.ds = dataset_estadistico()
+    self.lote = Lote(self.ds)
+
+  def test_lightgbm_poisson_contrato(self):
+    p = PredictorLightGBMPoisson.entrenar(self.ds, params={"n_estimators": 30})
+    salida = p.predecir(self.lote)
+    self.assertEqual(salida.shape, (len(self.ds), 2))
+    self.assertTrue(np.isfinite(salida).all() and (salida > 0).all())
+    with tempfile.TemporaryDirectory() as carpeta:
+      guardar_predictor(p, carpeta)
+      cargado, esquema = cargar_predictor(carpeta)
+      self.assertEqual(esquema["backend"], "lightgbm_poisson")
+      np.testing.assert_allclose(cargado.predecir(self.lote), salida, rtol=1e-6)
+
+  def test_lightgbm_multiclase_probabilidades(self):
+    p = PredictorLightGBMMulticlase.entrenar(self.ds, params={"n_estimators": 30})
+    probs = p.probabilidades(self.lote)
+    self.assertEqual(probs.shape, (len(self.ds), 3))
+    np.testing.assert_allclose(probs.sum(axis=1), 1, rtol=1e-10)
+    with tempfile.TemporaryDirectory() as carpeta:
+      guardar_predictor(p, carpeta)
+      cargado, _ = cargar_predictor(carpeta)
+      np.testing.assert_allclose(cargado.probabilidades(self.lote), probs, rtol=1e-6)
+
+  def test_random_forest_probabilidades(self):
+    p = PredictorRandomForest.entrenar(self.ds, params={"n_estimators": 30})
+    probs = p.probabilidades(self.lote)
+    self.assertEqual(probs.shape, (len(self.ds), 3))
+    np.testing.assert_allclose(probs.sum(axis=1), 1, rtol=1e-10)
+    with tempfile.TemporaryDirectory() as carpeta:
+      guardar_predictor(p, carpeta)
+      cargado, _ = cargar_predictor(carpeta)
+      np.testing.assert_allclose(cargado.probabilidades(self.lote), probs, rtol=1e-6)
+
+
+class EnsambleTests(SimpleTestCase):
+
+  def setUp(self):
+    self.ds = dataset_estadistico()
+    self.lote = Lote(self.ds)
+    self.base = [PredictorPoissonGLM.entrenar(self.ds), PredictorLightGBMPoisson.entrenar(self.ds, params={"n_estimators": 30})]
+
+  def test_probabilidades_y_roundtrip(self):
+    ensamble = PredictorEnsamble.entrenar(self.base, self.ds, np.ones(len(self.ds), dtype=bool))
+    probs = ensamble.probabilidades(self.lote)
+    self.assertEqual(probs.shape, (len(self.ds), 3))
+    np.testing.assert_allclose(probs.sum(axis=1), 1, rtol=1e-10)
+    with tempfile.TemporaryDirectory() as carpeta:
+      guardar_predictor(ensamble, carpeta)
+      cargado, esquema = cargar_predictor(carpeta)
+      self.assertEqual(esquema["backend"], "ensamble")
+      np.testing.assert_allclose(cargado.probabilidades(self.lote), probs, rtol=1e-6)
 
 
 class PredictorKerasTests(SimpleTestCase):

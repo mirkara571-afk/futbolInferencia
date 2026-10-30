@@ -22,22 +22,24 @@ La guía v2 pide que 2018+2022 y 2026 se miren **una sola vez** al final (Etapa 
 | 2026-10-25 | 2018+2022 y 2026, LSTM con/sin umbral + baselines + Elo | 51,56 % con umbral y 63,46 % en 2026 (LSTM); Elo 51,56 % y 66,35 % | `experimentos/resultados_baseline.json` | Histórico: es la evidencia de la auditoría, no una mirada confirmatoria nueva |
 | 2026-10-25 | README / guía v2 | 53,9 % (LSTM sin umbral) y 63,8 % en 2026 | `README.md`, PDF v2 | Histórico: cifras narrativas, no comparables entre sí |
 | 2026-10-30 | Validación móvil completa, **sin prueba** | Elo 0,8409 vs LSTM 0,8406 de log-loss; acierto 62,4 % vs 61,6 %; ECE 0,011 vs 0,024 | `experimentos/resultados_validacion.json` | Correcta: no toca 2018/2022/2026; sirve para elegir |
+| 2026-10-30 | **Mirada confirmatoria de F.3**: ensamble Elo+GLM+LightGBM y bases | 2018+2022: ensamble 1,0073 vs Elo 1,0201 de log-loss; 2026: ensamble 0,8581 vs Elo 0,8541. Diferencias no significativas (`p_dm` 0,391 y 0,754) | `experimentos/resultados_finales.json` | **Única mirada de F.3; no se reoptimizó con ella** |
 
 > **2026-10-30:** se lanzó un `evaluar_modelos` completo y se detuvo **antes** de llegar a la prueba al comprobar que iba a mirar el hold-out; no se usó ningún resultado de test de esa corrida. La corrida válida de ese día es `--solo-validacion`.
 
-> Las tres cifras de 2026 (66,35 / 63,46 / 63,8) no son tres modelos distintos necesariamente: son tres formas de contar el mismo periodo. Hasta F.3 no se debe afirmar "mejoramos en 2026" con ninguna de ellas.
+> Las tres cifras de 2026 (66,35 / 63,46 / 63,8) no son tres modelos distintos necesariamente: son tres formas de contar el mismo periodo. La mirada de F.3 ya está hecha y no se debe reutilizar para elegir otro modelo.
 
-## Próxima mirada permitida
+## Mirada confirmatoria (realizada)
 
 | Campo | Valor |
 |---|---|
-| Cuándo | Etapa F.3, después de fijar el ganador por validación |
-| Qué se medirá | El modelo/ensamble elegido y el Elo puro en 2018+2022 y 2026 |
-| Métrica primaria | log-loss (con intervalo bootstrap y Diebold-Mariano) |
-| Métrica secundaria | RPS; acierto como guardrail |
-| Criterio | Ventaja en log-loss y RPS con IC 95 % sin 0 y comparación pareada; empates predichos dentro de ±5 pp del ~22 % real |
-| Quién | Dueño del proyecto / orquestador |
-| Artefacto | `experimentos/resultados_finales.json` (nuevo) y actualización de README/notebook |
+| Cuándo | 2026-10-30 (F.3) |
+| Qué se midió | Ensamble Elo+Poisson GLM+LightGBM Poisson con pesos fijados en validación, y los modelos base, en 2018+2022 y 2026 |
+| Métrica primaria | log-loss con bootstrap y Diebold-Mariano |
+| Resultado | 2018+2022: ensamble 1,0073 vs Elo 1,0201; 2026: 0,8581 vs 0,8541; ninguna diferencia significativa |
+| Decisión | **No se promueve ningún modelo nuevo**: el Elo sigue siendo la referencia y el ensamble no generaliza de forma consistente |
+| Artefacto | `experimentos/resultados_finales.json` |
+
+Cualquier modelo nuevo a partir de aquí necesita una **nueva** validación y una nueva mirada pre-registrada; no se puede reutilizar esta prueba para elegir otro candidato.
 
 ## Cómo se registrará una mirada extraordinaria
 

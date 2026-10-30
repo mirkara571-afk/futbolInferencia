@@ -1,0 +1,1187 @@
+{
+  "fecha": "2026-10-30",
+  "dataset": "partidos_features.csv",
+  "partidos": 9833,
+  "pesos_ensamble": [
+    0.10589530358921335,
+    0.4835345438213043,
+    0.41057015258948243
+  ],
+  "prueba": {
+    "elo": {
+      "partidos": 128,
+      "mae_goles": 0.9223868490418374,
+      "acierto_resultado": 51.5625,
+      "marcador_exacto": 14.0625,
+      "deviance": 0.9043941802569968,
+      "log_loss": 1.0200751773613668,
+      "brier": 0.6024080156703967,
+      "rps": 0.21703605225819672,
+      "calibracion": [
+        {
+          "desde": 0.0,
+          "hasta": 0.1,
+          "n": 17,
+          "probabilidad": 0.07812427660130733,
+          "frecuencia": 0.11764705882352941
+        },
+        {
+          "desde": 0.1,
+          "hasta": 0.2,
+          "n": 75,
+          "probabilidad": 0.153599722676689,
+          "frecuencia": 0.22666666666666666
+        },
+        {
+          "desde": 0.2,
+          "hasta": 0.3,
+          "n": 137,
+          "probabilidad": 0.25919339290332133,
+          "frecuencia": 0.24817518248175183
+        },
+        {
+          "desde": 0.3,
+          "hasta": 0.4,
+          "n": 43,
+          "probabilidad": 0.33728082680487426,
+          "frecuencia": 0.3488372093023256
+        },
+        {
+          "desde": 0.4,
+          "hasta": 0.5,
+          "n": 35,
+          "probabilidad": 0.44651245172803067,
+          "frecuencia": 0.42857142857142855
+        },
+        {
+          "desde": 0.5,
+          "hasta": 0.6,
+          "n": 29,
+          "probabilidad": 0.546780475015902,
+          "frecuencia": 0.4482758620689655
+        },
+        {
+          "desde": 0.6,
+          "hasta": 0.7,
+          "n": 27,
+          "probabilidad": 0.6563748731462371,
+          "frecuencia": 0.6296296296296297
+        },
+        {
+          "desde": 0.7,
+          "hasta": 0.8,
+          "n": 16,
+          "probabilidad": 0.7330144100634528,
+          "frecuencia": 0.75
+        },
+        {
+          "desde": 0.8,
+          "hasta": 0.9,
+          "n": 5,
+          "probabilidad": 0.840883198951121,
+          "frecuencia": 0.6
+        },
+        {
+          "desde": 0.9,
+          "hasta": 1.0,
+          "n": 0,
+          "probabilidad": null,
+          "frecuencia": null
+        }
+      ],
+      "ece": 0.036044801996881565,
+      "intervalos": {
+        "mae_goles": [
+          0.8292600954325658,
+          1.0183029644729498
+        ],
+        "acierto_resultado": [
+          42.96875,
+          60.15625
+        ],
+        "marcador_exacto": [
+          8.59375,
+          20.3125
+        ],
+        "deviance": [
+          0.8289487377909136,
+          0.9760252335375155
+        ],
+        "log_loss": [
+          0.9185964034071162,
+          1.120365572738893
+        ],
+        "brier": [
+          0.5365552638586016,
+          0.6677158132773263
+        ],
+        "rps": [
+          0.1882236096588332,
+          0.247263639739256
+        ]
+      },
+      "decisiones": {
+        "argmax": {
+          "acierto": 51.5625,
+          "empates_predichos": 0.0
+        },
+        "rps": {
+          "acierto": 46.09375,
+          "empates_predichos": 39.84375
+        },
+        "empates_reales": 21.875
+      }
+    },
+    "poisson_glm": {
+      "partidos": 128,
+      "mae_goles": 0.9204472780832467,
+      "acierto_resultado": 53.125,
+      "marcador_exacto": 17.96875,
+      "deviance": 0.9002118575182045,
+      "log_loss": 1.0117135275173628,
+      "brier": 0.5972501401851523,
+      "rps": 0.2147228539111966,
+      "calibracion": [
+        {
+          "desde": 0.0,
+          "hasta": 0.1,
+          "n": 9,
+          "probabilidad": 0.07809164374709612,
+          "frecuencia": 0.3333333333333333
+        },
+        {
+          "desde": 0.1,
+          "hasta": 0.2,
+          "n": 63,
+          "probabilidad": 0.16675840990436683,
+          "frecuencia": 0.1746031746031746
+        },
+        {
+          "desde": 0.2,
+          "hasta": 0.3,
+          "n": 156,
+          "probabilidad": 0.24601017953753804,
+          "frecuencia": 0.23717948717948717
+        },
+        {
+          "desde": 0.3,
+          "hasta": 0.4,
+          "n": 38,
+          "probabilidad": 0.3467990664039128,
+          "frecuencia": 0.34210526315789475
+        },
+        {
+          "desde": 0.4,
+          "hasta": 0.5,
+          "n": 43,
+          "probabilidad": 0.44829077795533356,
+          "frecuencia": 0.3953488372093023
+        },
+        {
+          "desde": 0.5,
+          "hasta": 0.6,
+          "n": 39,
+          "probabilidad": 0.5521311375670556,
+          "frecuencia": 0.6153846153846154
+        },
+        {
+          "desde": 0.6,
+          "hasta": 0.7,
+          "n": 24,
+          "probabilidad": 0.6376564417288694,
+          "frecuencia": 0.5833333333333334
+        },
+        {
+          "desde": 0.7,
+          "hasta": 0.8,
+          "n": 10,
+          "probabilidad": 0.7419972828437469,
+          "frecuencia": 0.9
+        },
+        {
+          "desde": 0.8,
+          "hasta": 0.9,
+          "n": 2,
+          "probabilidad": 0.8503322370451897,
+          "frecuencia": 0.0
+        },
+        {
+          "desde": 0.9,
+          "hasta": 1.0,
+          "n": 0,
+          "probabilidad": null,
+          "frecuencia": null
+        }
+      ],
+      "ece": 0.03561245637399895,
+      "intervalos": {
+        "mae_goles": [
+          0.8280300839934898,
+          1.013006156480514
+        ],
+        "acierto_resultado": [
+          44.53125,
+          61.71875
+        ],
+        "marcador_exacto": [
+          11.71875,
+          25.0
+        ],
+        "deviance": [
+          0.8236529680332716,
+          0.9721651894994193
+        ],
+        "log_loss": [
+          0.9172016082851006,
+          1.1064528632473236
+        ],
+        "brier": [
+          0.5369432800733169,
+          0.6573649139301759
+        ],
+        "rps": [
+          0.18931445773501282,
+          0.24178442093620198
+        ]
+      },
+      "decisiones": {
+        "argmax": {
+          "acierto": 53.125,
+          "empates_predichos": 0.0
+        },
+        "rps": {
+          "acierto": 48.4375,
+          "empates_predichos": 41.40625
+        },
+        "empates_reales": 21.875
+      },
+      "contra_elo": {
+        "log_loss": {
+          "metrica": "log_loss",
+          "diferencia": -0.008361649844004048,
+          "intervalo": [
+            -0.03549909225772234,
+            0.01939136866308011
+          ],
+          "p_bootstrap": 0.565,
+          "dm": -0.5806613804137223,
+          "p_dm": 0.5614686949417675,
+          "solo_a": 3,
+          "solo_b": 1,
+          "p_mcnemar": 0.625
+        },
+        "rps": {
+          "metrica": "rps",
+          "diferencia": -0.0023131983470000986,
+          "intervalo": [
+            -0.009903836517487028,
+            0.0052006589266198775
+          ],
+          "p_bootstrap": 0.573,
+          "dm": -0.5775936995259707,
+          "p_dm": 0.5635384616466171,
+          "solo_a": 3,
+          "solo_b": 1,
+          "p_mcnemar": 0.625
+        }
+      }
+    },
+    "lightgbm_poisson": {
+      "partidos": 128,
+      "mae_goles": 0.898166209872703,
+      "acierto_resultado": 52.34375,
+      "marcador_exacto": 11.71875,
+      "deviance": 0.8878411634689332,
+      "log_loss": 1.0121761069486457,
+      "brier": 0.5982544515320329,
+      "rps": 0.21393418942618486,
+      "calibracion": [
+        {
+          "desde": 0.0,
+          "hasta": 0.1,
+          "n": 2,
+          "probabilidad": 0.07877095883865803,
+          "frecuencia": 1.0
+        },
+        {
+          "desde": 0.1,
+          "hasta": 0.2,
+          "n": 71,
+          "probabilidad": 0.16180561104541966,
+          "frecuencia": 0.1267605633802817
+        },
+        {
+          "desde": 0.2,
+          "hasta": 0.3,
+          "n": 165,
+          "probabilidad": 0.24685597829329878,
+          "frecuencia": 0.26666666666666666
+        },
+        {
+          "desde": 0.3,
+          "hasta": 0.4,
+          "n": 29,
+          "probabilidad": 0.3565802694477477,
+          "frecuencia": 0.3103448275862069
+        },
+        {
+          "desde": 0.4,
+          "hasta": 0.5,
+          "n": 32,
+          "probabilidad": 0.44764352622717396,
+          "frecuencia": 0.40625
+        },
+        {
+          "desde": 0.5,
+          "hasta": 0.6,
+          "n": 46,
+          "probabilidad": 0.5519442809075208,
+          "frecuencia": 0.5652173913043478
+        },
+        {
+          "desde": 0.6,
+          "hasta": 0.7,
+          "n": 33,
+          "probabilidad": 0.6423872774818449,
+          "frecuencia": 0.6666666666666666
+        },
+        {
+          "desde": 0.7,
+          "hasta": 0.8,
+          "n": 6,
+          "probabilidad": 0.7281286357129578,
+          "frecuencia": 0.5
+        },
+        {
+          "desde": 0.8,
+          "hasta": 0.9,
+          "n": 0,
+          "probabilidad": null,
+          "frecuencia": null
+        },
+        {
+          "desde": 0.9,
+          "hasta": 1.0,
+          "n": 0,
+          "probabilidad": null,
+          "frecuencia": null
+        }
+      ],
+      "ece": 0.03397238395062067,
+      "intervalos": {
+        "mae_goles": [
+          0.8050690946227379,
+          0.9931041437661589
+        ],
+        "acierto_resultado": [
+          43.730468750000036,
+          60.9375
+        ],
+        "marcador_exacto": [
+          7.011718750000035,
+          17.1875
+        ],
+        "deviance": [
+          0.8117449742366301,
+          0.9602970541944392
+        ],
+        "log_loss": [
+          0.9268794777902928,
+          1.1019895333870573
+        ],
+        "brier": [
+          0.5393672541554848,
+          0.6599826339077365
+        ],
+        "rps": [
+          0.18743876368479476,
+          0.24092988065877655
+        ]
+      },
+      "decisiones": {
+        "argmax": {
+          "acierto": 52.34375,
+          "empates_predichos": 0.0
+        },
+        "rps": {
+          "acierto": 50.0,
+          "empates_predichos": 33.59375
+        },
+        "empates_reales": 21.875
+      },
+      "contra_elo": {
+        "log_loss": {
+          "metrica": "log_loss",
+          "diferencia": -0.007899070412721053,
+          "intervalo": [
+            -0.04874816421163868,
+            0.034243064278948014
+          ],
+          "p_bootstrap": 0.706,
+          "dm": -0.36088942676212943,
+          "p_dm": 0.7181821079277497,
+          "solo_a": 4,
+          "solo_b": 3,
+          "p_mcnemar": 1.0
+        },
+        "rps": {
+          "metrica": "rps",
+          "diferencia": -0.003101862832011878,
+          "intervalo": [
+            -0.01554639592671357,
+            0.009299446057506043
+          ],
+          "p_bootstrap": 0.615,
+          "dm": -0.47852714903118215,
+          "p_dm": 0.6322750558004779,
+          "solo_a": 4,
+          "solo_b": 3,
+          "p_mcnemar": 1.0
+        }
+      }
+    },
+    "ensamble": {
+      "partidos": 128,
+      "mae_goles": 0.9025515818594885,
+      "acierto_resultado": 51.5625,
+      "marcador_exacto": 13.28125,
+      "deviance": 0.8904416207995837,
+      "log_loss": 1.0072675111408622,
+      "brier": 0.5950274332688158,
+      "rps": 0.2132169331791418,
+      "calibracion": [
+        {
+          "desde": 0.0,
+          "hasta": 0.1,
+          "n": 3,
+          "probabilidad": 0.06924739787174128,
+          "frecuencia": 0.6666666666666666
+        },
+        {
+          "desde": 0.1,
+          "hasta": 0.2,
+          "n": 67,
+          "probabilidad": 0.16233018115782688,
+          "frecuencia": 0.1044776119402985
+        },
+        {
+          "desde": 0.2,
+          "hasta": 0.3,
+          "n": 161,
+          "probabilidad": 0.2447696221529784,
+          "frecuencia": 0.2732919254658385
+        },
+        {
+          "desde": 0.3,
+          "hasta": 0.4,
+          "n": 33,
+          "probabilidad": 0.3424192076256829,
+          "frecuencia": 0.3333333333333333
+        },
+        {
+          "desde": 0.4,
+          "hasta": 0.5,
+          "n": 37,
+          "probabilidad": 0.44408113371400826,
+          "frecuencia": 0.35135135135135137
+        },
+        {
+          "desde": 0.5,
+          "hasta": 0.6,
+          "n": 47,
+          "probabilidad": 0.549459374104838,
+          "frecuencia": 0.574468085106383
+        },
+        {
+          "desde": 0.6,
+          "hasta": 0.7,
+          "n": 29,
+          "probabilidad": 0.6450060389313524,
+          "frecuencia": 0.6896551724137931
+        },
+        {
+          "desde": 0.7,
+          "hasta": 0.8,
+          "n": 5,
+          "probabilidad": 0.7238411103414099,
+          "frecuencia": 0.8
+        },
+        {
+          "desde": 0.8,
+          "hasta": 0.9,
+          "n": 2,
+          "probabilidad": 0.8142097197356801,
+          "frecuencia": 0.0
+        },
+        {
+          "desde": 0.9,
+          "hasta": 1.0,
+          "n": 0,
+          "probabilidad": null,
+          "frecuencia": null
+        }
+      ],
+      "ece": 0.048100923833914594,
+      "intervalos": {
+        "mae_goles": [
+          0.8078385731666744,
+          0.9959972973644164
+        ],
+        "acierto_resultado": [
+          42.96875,
+          60.15625
+        ],
+        "marcador_exacto": [
+          7.8125,
+          19.53125
+        ],
+        "deviance": [
+          0.8156834965275661,
+          0.9609754314317912
+        ],
+        "log_loss": [
+          0.9173465660792571,
+          1.0969123998192207
+        ],
+        "brier": [
+          0.5352060695916973,
+          0.6543780348550615
+        ],
+        "rps": [
+          0.18758071128287365,
+          0.24029649583146162
+        ]
+      },
+      "decisiones": {
+        "argmax": {
+          "acierto": 51.5625,
+          "empates_predichos": 0.0
+        },
+        "rps": {
+          "acierto": 50.78125,
+          "empates_predichos": 35.15625
+        },
+        "empates_reales": 21.875
+      },
+      "contra_elo": {
+        "log_loss": {
+          "metrica": "log_loss",
+          "diferencia": -0.0128076662205044,
+          "intervalo": [
+            -0.04136484044991097,
+            0.015671400471073467
+          ],
+          "p_bootstrap": 0.392,
+          "dm": -0.858133377156705,
+          "p_dm": 0.39081881886479464,
+          "solo_a": 2,
+          "solo_b": 2,
+          "p_mcnemar": 1.0
+        },
+        "rps": {
+          "metrica": "rps",
+          "diferencia": -0.0038191190790549017,
+          "intervalo": [
+            -0.011822103697302662,
+            0.004153704692376153
+          ],
+          "p_bootstrap": 0.358,
+          "dm": -0.9145025223951754,
+          "p_dm": 0.3604528530752952,
+          "solo_a": 2,
+          "solo_b": 2,
+          "p_mcnemar": 1.0
+        }
+      }
+    }
+  },
+  "prueba_2026": {
+    "elo": {
+      "partidos": 104,
+      "mae_goles": 0.9165670066304406,
+      "acierto_resultado": 66.34615384615384,
+      "marcador_exacto": 11.538461538461538,
+      "deviance": 0.7500624048806236,
+      "log_loss": 0.8541050045254361,
+      "brier": 0.49924753549586015,
+      "rps": 0.15813252153635335,
+      "calibracion": [
+        {
+          "desde": 0.0,
+          "hasta": 0.1,
+          "n": 36,
+          "probabilidad": 0.06722465571771384,
+          "frecuencia": 0.08333333333333333
+        },
+        {
+          "desde": 0.1,
+          "hasta": 0.2,
+          "n": 53,
+          "probabilidad": 0.1508000176247824,
+          "frecuencia": 0.1320754716981132
+        },
+        {
+          "desde": 0.2,
+          "hasta": 0.3,
+          "n": 106,
+          "probabilidad": 0.26217750743183954,
+          "frecuencia": 0.1792452830188679
+        },
+        {
+          "desde": 0.3,
+          "hasta": 0.4,
+          "n": 20,
+          "probabilidad": 0.33502676292351163,
+          "frecuencia": 0.35
+        },
+        {
+          "desde": 0.4,
+          "hasta": 0.5,
+          "n": 31,
+          "probabilidad": 0.44391959457067304,
+          "frecuencia": 0.6774193548387096
+        },
+        {
+          "desde": 0.5,
+          "hasta": 0.6,
+          "n": 20,
+          "probabilidad": 0.5490719831645009,
+          "frecuencia": 0.55
+        },
+        {
+          "desde": 0.6,
+          "hasta": 0.7,
+          "n": 17,
+          "probabilidad": 0.6427069969144799,
+          "frecuencia": 0.8235294117647058
+        },
+        {
+          "desde": 0.7,
+          "hasta": 0.8,
+          "n": 15,
+          "probabilidad": 0.7620819385853085,
+          "frecuencia": 0.8
+        },
+        {
+          "desde": 0.8,
+          "hasta": 0.9,
+          "n": 11,
+          "probabilidad": 0.8401225930301226,
+          "frecuencia": 0.7272727272727273
+        },
+        {
+          "desde": 0.9,
+          "hasta": 1.0,
+          "n": 3,
+          "probabilidad": 0.9182055897218637,
+          "frecuencia": 0.6666666666666666
+        }
+      ],
+      "ece": 0.07550757701529102,
+      "intervalos": {
+        "mae_goles": [
+          0.8117059674477897,
+          1.03304667966319
+        ],
+        "acierto_resultado": [
+          57.69230769230769,
+          75.0
+        ],
+        "marcador_exacto": [
+          5.769230769230769,
+          18.26923076923077
+        ],
+        "deviance": [
+          0.6363869322844383,
+          0.8493124896103051
+        ],
+        "log_loss": [
+          0.7542516293019453,
+          0.9683920152002653
+        ],
+        "brier": [
+          0.42970672612304306,
+          0.5804838804618022
+        ],
+        "rps": [
+          0.13565484749335374,
+          0.18265530688641243
+        ]
+      },
+      "decisiones": {
+        "argmax": {
+          "acierto": 66.34615384615384,
+          "empates_predichos": 0.0
+        },
+        "rps": {
+          "acierto": 53.84615384615385,
+          "empates_predichos": 36.53846153846153
+        },
+        "empates_reales": 23.076923076923077
+      }
+    },
+    "poisson_glm": {
+      "partidos": 104,
+      "mae_goles": 0.925292516234276,
+      "acierto_resultado": 64.42307692307692,
+      "marcador_exacto": 13.461538461538462,
+      "deviance": 0.7494543776334724,
+      "log_loss": 0.8583620266056544,
+      "brier": 0.49929737314087863,
+      "rps": 0.15959493301267022,
+      "calibracion": [
+        {
+          "desde": 0.0,
+          "hasta": 0.1,
+          "n": 22,
+          "probabilidad": 0.06268801135381309,
+          "frecuencia": 0.045454545454545456
+        },
+        {
+          "desde": 0.1,
+          "hasta": 0.2,
+          "n": 64,
+          "probabilidad": 0.1520262835426774,
+          "frecuencia": 0.171875
+        },
+        {
+          "desde": 0.2,
+          "hasta": 0.3,
+          "n": 99,
+          "probabilidad": 0.24795935934597535,
+          "frecuencia": 0.1717171717171717
+        },
+        {
+          "desde": 0.3,
+          "hasta": 0.4,
+          "n": 34,
+          "probabilidad": 0.3528537139114406,
+          "frecuencia": 0.2647058823529412
+        },
+        {
+          "desde": 0.4,
+          "hasta": 0.5,
+          "n": 30,
+          "probabilidad": 0.45142763879930786,
+          "frecuencia": 0.6
+        },
+        {
+          "desde": 0.5,
+          "hasta": 0.6,
+          "n": 17,
+          "probabilidad": 0.5493345818948717,
+          "frecuencia": 0.7647058823529411
+        },
+        {
+          "desde": 0.6,
+          "hasta": 0.7,
+          "n": 21,
+          "probabilidad": 0.6517344024501537,
+          "frecuencia": 0.7619047619047619
+        },
+        {
+          "desde": 0.7,
+          "hasta": 0.8,
+          "n": 14,
+          "probabilidad": 0.7443538957558479,
+          "frecuencia": 0.8571428571428571
+        },
+        {
+          "desde": 0.8,
+          "hasta": 0.9,
+          "n": 9,
+          "probabilidad": 0.8357738823318058,
+          "frecuencia": 0.6666666666666666
+        },
+        {
+          "desde": 0.9,
+          "hasta": 1.0,
+          "n": 2,
+          "probabilidad": 0.9146758294238088,
+          "frecuencia": 0.5
+        }
+      ],
+      "ece": 0.08511820353493522,
+      "intervalos": {
+        "mae_goles": [
+          0.8258188445108533,
+          1.037581910596533
+        ],
+        "acierto_resultado": [
+          55.76923076923077,
+          73.07692307692308
+        ],
+        "marcador_exacto": [
+          6.730769230769231,
+          21.153846153846153
+        ],
+        "deviance": [
+          0.6313882469113857,
+          0.8526947960824377
+        ],
+        "log_loss": [
+          0.7633981791542417,
+          0.9703773609457652
+        ],
+        "brier": [
+          0.43131226263449984,
+          0.5784127291219162
+        ],
+        "rps": [
+          0.13884684493844338,
+          0.18224784764644306
+        ]
+      },
+      "decisiones": {
+        "argmax": {
+          "acierto": 64.42307692307693,
+          "empates_predichos": 0.0
+        },
+        "rps": {
+          "acierto": 57.692307692307686,
+          "empates_predichos": 39.42307692307692
+        },
+        "empates_reales": 23.076923076923077
+      },
+      "contra_elo": {
+        "log_loss": {
+          "metrica": "log_loss",
+          "diferencia": 0.00425702208021847,
+          "intervalo": [
+            -0.017226928369540283,
+            0.023284596629582443
+          ],
+          "p_bootstrap": 0.67,
+          "dm": 0.40455058711618236,
+          "p_dm": 0.685807886201893,
+          "solo_a": 0,
+          "solo_b": 2,
+          "p_mcnemar": 0.5
+        },
+        "rps": {
+          "metrica": "rps",
+          "diferencia": 0.001462411476316892,
+          "intervalo": [
+            -0.003952694494854124,
+            0.0064286241588244804
+          ],
+          "p_bootstrap": 0.584,
+          "dm": 0.5512945770045706,
+          "p_dm": 0.581431755404804,
+          "solo_a": 0,
+          "solo_b": 2,
+          "p_mcnemar": 0.5
+        }
+      }
+    },
+    "lightgbm_poisson": {
+      "partidos": 104,
+      "mae_goles": 0.9277414529016307,
+      "acierto_resultado": 64.42307692307692,
+      "marcador_exacto": 16.346153846153847,
+      "deviance": 0.7628154233395278,
+      "log_loss": 0.8676923937915244,
+      "brier": 0.508929858735776,
+      "rps": 0.16510132895724025,
+      "calibracion": [
+        {
+          "desde": 0.0,
+          "hasta": 0.1,
+          "n": 10,
+          "probabilidad": 0.07702124789426515,
+          "frecuencia": 0.0
+        },
+        {
+          "desde": 0.1,
+          "hasta": 0.2,
+          "n": 63,
+          "probabilidad": 0.15509766315250095,
+          "frecuencia": 0.14285714285714285
+        },
+        {
+          "desde": 0.2,
+          "hasta": 0.3,
+          "n": 115,
+          "probabilidad": 0.24449700348303807,
+          "frecuencia": 0.1826086956521739
+        },
+        {
+          "desde": 0.3,
+          "hasta": 0.4,
+          "n": 30,
+          "probabilidad": 0.3477380551774365,
+          "frecuencia": 0.3333333333333333
+        },
+        {
+          "desde": 0.4,
+          "hasta": 0.5,
+          "n": 22,
+          "probabilidad": 0.4465026927965367,
+          "frecuencia": 0.5
+        },
+        {
+          "desde": 0.5,
+          "hasta": 0.6,
+          "n": 31,
+          "probabilidad": 0.5513993449827268,
+          "frecuencia": 0.7741935483870968
+        },
+        {
+          "desde": 0.6,
+          "hasta": 0.7,
+          "n": 26,
+          "probabilidad": 0.6438951808179687,
+          "frecuencia": 0.7307692307692307
+        },
+        {
+          "desde": 0.7,
+          "hasta": 0.8,
+          "n": 13,
+          "probabilidad": 0.7378051293992388,
+          "frecuencia": 0.6923076923076923
+        },
+        {
+          "desde": 0.8,
+          "hasta": 0.9,
+          "n": 2,
+          "probabilidad": 0.8295948609018234,
+          "frecuencia": 0.5
+        },
+        {
+          "desde": 0.9,
+          "hasta": 1.0,
+          "n": 0,
+          "probabilidad": null,
+          "frecuencia": null
+        }
+      ],
+      "ece": 0.06629360602615676,
+      "intervalos": {
+        "mae_goles": [
+          0.8212049593418352,
+          1.044280099922728
+        ],
+        "acierto_resultado": [
+          55.76923076923077,
+          73.07692307692308
+        ],
+        "marcador_exacto": [
+          9.615384615384615,
+          24.03846153846154
+        ],
+        "deviance": [
+          0.6635340261432993,
+          0.8507417552202676
+        ],
+        "log_loss": [
+          0.7831497746227786,
+          0.9583833190987119
+        ],
+        "brier": [
+          0.446744381841472,
+          0.5765379462816493
+        ],
+        "rps": [
+          0.14544335424131297,
+          0.18643873866766836
+        ]
+      },
+      "decisiones": {
+        "argmax": {
+          "acierto": 64.42307692307693,
+          "empates_predichos": 0.0
+        },
+        "rps": {
+          "acierto": 60.57692307692307,
+          "empates_predichos": 30.76923076923077
+        },
+        "empates_reales": 23.076923076923077
+      },
+      "contra_elo": {
+        "log_loss": {
+          "metrica": "log_loss",
+          "diferencia": 0.013587389266088214,
+          "intervalo": [
+            -0.027906209676574582,
+            0.051633447618266416
+          ],
+          "p_bootstrap": 0.52,
+          "dm": 0.668579697959695,
+          "p_dm": 0.5037636268321264,
+          "solo_a": 1,
+          "solo_b": 3,
+          "p_mcnemar": 0.625
+        },
+        "rps": {
+          "metrica": "rps",
+          "diferencia": 0.006968807420886893,
+          "intervalo": [
+            -0.0023924040247585293,
+            0.015895350286302477
+          ],
+          "p_bootstrap": 0.131,
+          "dm": 1.5068104570735739,
+          "p_dm": 0.1318592484046508,
+          "solo_a": 1,
+          "solo_b": 3,
+          "p_mcnemar": 0.625
+        }
+      }
+    },
+    "ensamble": {
+      "partidos": 104,
+      "mae_goles": 0.9164533747450558,
+      "acierto_resultado": 64.42307692307692,
+      "marcador_exacto": 13.461538461538462,
+      "deviance": 0.7483485724821167,
+      "log_loss": 0.8581209455050863,
+      "brier": 0.5006381103151081,
+      "rps": 0.160608121735724,
+      "calibracion": [
+        {
+          "desde": 0.0,
+          "hasta": 0.1,
+          "n": 15,
+          "probabilidad": 0.06997747083727726,
+          "frecuencia": 0.06666666666666667
+        },
+        {
+          "desde": 0.1,
+          "hasta": 0.2,
+          "n": 67,
+          "probabilidad": 0.15205832497552038,
+          "frecuencia": 0.13432835820895522
+        },
+        {
+          "desde": 0.2,
+          "hasta": 0.3,
+          "n": 108,
+          "probabilidad": 0.24874340498772887,
+          "frecuencia": 0.18518518518518517
+        },
+        {
+          "desde": 0.3,
+          "hasta": 0.4,
+          "n": 29,
+          "probabilidad": 0.3526388320392187,
+          "frecuencia": 0.3103448275862069
+        },
+        {
+          "desde": 0.4,
+          "hasta": 0.5,
+          "n": 25,
+          "probabilidad": 0.4550192945863209,
+          "frecuencia": 0.56
+        },
+        {
+          "desde": 0.5,
+          "hasta": 0.6,
+          "n": 22,
+          "probabilidad": 0.5409390424049417,
+          "frecuencia": 0.7272727272727273
+        },
+        {
+          "desde": 0.6,
+          "hasta": 0.7,
+          "n": 21,
+          "probabilidad": 0.6407191598294397,
+          "frecuencia": 0.8095238095238095
+        },
+        {
+          "desde": 0.7,
+          "hasta": 0.8,
+          "n": 20,
+          "probabilidad": 0.7353380087738222,
+          "frecuencia": 0.7
+        },
+        {
+          "desde": 0.8,
+          "hasta": 0.9,
+          "n": 5,
+          "probabilidad": 0.846722493361499,
+          "frecuencia": 0.8
+        },
+        {
+          "desde": 0.9,
+          "hasta": 1.0,
+          "n": 0,
+          "probabilidad": null,
+          "frecuencia": null
+        }
+      ],
+      "ece": 0.06582536119240401,
+      "intervalos": {
+        "mae_goles": [
+          0.8118265209764344,
+          1.030358657650198
+        ],
+        "acierto_resultado": [
+          55.76923076923077,
+          73.07692307692308
+        ],
+        "marcador_exacto": [
+          7.6923076923076925,
+          21.153846153846153
+        ],
+        "deviance": [
+          0.6389323144686341,
+          0.8446957248420037
+        ],
+        "log_loss": [
+          0.76818486958018,
+          0.9592889474971089
+        ],
+        "brier": [
+          0.43579365073919013,
+          0.5747281070873125
+        ],
+        "rps": [
+          0.1403941070807006,
+          0.1829264918405307
+        ]
+      },
+      "decisiones": {
+        "argmax": {
+          "acierto": 64.42307692307693,
+          "empates_predichos": 0.0
+        },
+        "rps": {
+          "acierto": 59.61538461538461,
+          "empates_predichos": 34.61538461538461
+        },
+        "empates_reales": 23.076923076923077
+      },
+      "contra_elo": {
+        "log_loss": {
+          "metrica": "log_loss",
+          "diferencia": 0.004015940979650053,
+          "intervalo": [
+            -0.021914276392916727,
+            0.0275635234402382
+          ],
+          "p_bootstrap": 0.757,
+          "dm": 0.3136199914917371,
+          "p_dm": 0.7538096740579354,
+          "solo_a": 0,
+          "solo_b": 2,
+          "p_mcnemar": 0.5
+        },
+        "rps": {
+          "metrica": "rps",
+          "diferencia": 0.002475600199370654,
+          "intervalo": [
+            -0.003171049864421239,
+            0.007906612818461518
+          ],
+          "p_bootstrap": 0.381,
+          "dm": 0.8745667920810086,
+          "p_dm": 0.3818096631369665,
+          "solo_a": 0,
+          "solo_b": 2,
+          "p_mcnemar": 0.5
+        }
+      }
+    }
+  },
+  "nota": "Mirada confirmatoria unica de F.3; no se reoptimiza con estos resultados"
+}

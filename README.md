@@ -5,7 +5,7 @@
 <!-- TODO (Phase 5): 15-second GIF of the "what if…?" mode, e.g. ![demo](docs/demo.gif) -->
 
 
-> **Status (October 2026):** the data pipeline, the tournament simulation (all 22 World Cups from 1934 to 2026) and the training dataset are working. The app uses the LSTM with Elo context, but the 25-October audit showed that it does **not** beat the pure Elo baseline: the project is now in Stage A (a trustworthy probability benchmark) and the next candidates are classical and tabular models. See [Model results](#model-results) and [Roadmap](#roadmap).
+> **Status (October 2026):** the data pipeline, the tournament simulation (all 22 World Cups from 1934 to 2026) and the training dataset are working. The app uses the LSTM with Elo context, but the 25-October audit showed that it does **not** beat the pure Elo baseline. Stages A, B, C and F are now implemented and evaluated: Poisson GLM, Dixon-Coles, ordinal, LightGBM, Random Forest and an ensemble. The ensemble wins on rolling validation and on 2018+2022, but not on 2026; **no model is promoted** and the Elo remains the reference. Stage G (champion probabilities) and H (API/demo) are next. See [Model results](#model-results) and [Roadmap](#roadmap).
 
 ---
 
@@ -203,7 +203,11 @@ python manage.py test fases
 | `python manage.py construir_dataset` | Builds `data/datasets/partidos_features.csv` (≈ 8,800 matches, takes a few minutes) for training; `--ciclo internacionales` uses every national-team match between World Cups instead of only the qualifiers |
 | `python manage.py evaluar_modelos` | Phase 2 in one command (~1 h on 4 CPU cores): picks the LSTM configuration, context and draw threshold with temporal validation, tests it on the 2018 + 2022 and 2026 World Cups against the three baselines, saves `experimentos/resultados_baseline.json` and the model in `data/modelos/lstm-<date>/`. `--solo-validacion` stops after the rolling validation, writes `experimentos/resultados_validacion.json` and never touches the hold-out |
 | `python manage.py evaluar_b` | Rolling validation of the Stage B models (Poisson GLM, ordinal, Dixon-Coles with `xi = 0`, `0.05`, `0.1`) against the Elo; saves `experimentos/resultados_b.json`. It never touches the hold-out |
+| `python manage.py evaluar_c` | Rolling validation of LightGBM (Poisson and multiclass) and Random Forest against the Elo; saves `experimentos/resultados_c.json` and `experimentos/importancia_c.json`. It never touches the hold-out |
+| `python manage.py evaluar_f` | Fits the ensemble weights on an inner validation and evaluates the ensemble and the draw decisions on the rolling validation; saves `experimentos/resultados_f.json`. It never touches the hold-out |
+| `python manage.py evaluar_final` | The **single** confirmatory look at 2018+2022 and 2026 for the Elo, GLM, LightGBM and the ensemble; saves `experimentos/resultados_finales.json`. Do not reuse it to choose another model |
 | `python manage.py entrenar_b` | Trains and saves the three Stage B models up to `--hasta` (default 2022) in `data/modelos/<backend>/`, with `esquema.json` (and `coeficientes.json` for the GLM). It does not change `MODEL_DIR` |
+| `python manage.py entrenar_c` | Trains and saves LightGBM Poisson, LightGBM multiclass and Random Forest up to `--hasta` (default 2022) in `data/modelos/<backend>/`. It does not change `MODEL_DIR` |
 | `python manage.py snapshot_consulta` | Photo of `consulta_general` for 2018 and 1986 (116 matches): `--guardar` writes `experimentos/snapshot_consulta.json`, `--verificar` fails if the simulation changes; used as the safety net for the H.2 refactor |
 | `python manage.py entrenar_predictor` | Retrains the baseline predictor from that file into `data/modelos/medias/` (`--hasta 2010` to leave later World Cups out) |
 | `python etl/busca_internacionales.py` | Rebuilds `data/partidos/internacionales.csv` (≈ 50,000 national-team matches since 1872, with competition type and neutral venue) from martj42/international_results, translating team names to the Spanish ones used in the database |
@@ -277,6 +281,46 @@ The three classic models were evaluated on the same rolling validation (2006, 20
 
 The fitted models are saved in `data/modelos/poisson_glm/`, `data/modelos/ordinal/` and `data/modelos/dixon_coles/` with their `esquema.json`; `Poisson GLM` also has `coeficientes.json`. They are **not** the app's model yet: `MODEL_DIR` still points to the LSTM until F.3 chooses the final candidate.
 
+### Stage C: tree models (30-October-2026)
+
+LightGBM (Poisson and multiclass) and Random Forest were evaluated on the same rolling validation, with `python manage.py evaluar_c`; JSON in [`experimentos/resultados_c.json`](experimentos/resultados_c.json).
+
+| Model | log-loss | RPS | correct outcome | ECE |
+|---|---:|---:|---:|---:|
+| **Poisson GLM** | **0.8366** | **0.1607** | 62.5 % | 0.019 |
+| LightGBM Poisson | 0.8382 | 0.1614 | **62.6 %** | 0.017 |
+| Elo puro | 0.8409 | 0.1624 | 62.4 % | **0.015** |
+| Random Forest | 0.8637 | 0.1670 | 60.4 % | 0.026 |
+| LightGBM multiclass | 0.8946 | 0.1703 | 60.4 % | 0.055 |
+
+LightGBM Poisson is a close second to the GLM and slightly better than the Elo, but the difference is not significant. The variable importance is clear: `elo_diff` dominates, followed by `rate_GC_rival`, `es_local`, `mos`, `gkps` and `rate_GF`. The multiclass and Random Forest result models are worse; their probabilities are poorly calibrated. Details in [`experimentos/importancia_c.json`](experimentos/importancia_c.json).
+
+### Stage F: ensemble, draw decision and the single test look (30-October-2026)
+
+The ensemble combines Elo + Poisson GLM + LightGBM Poisson with weights fitted on an **inner** validation (never on the outer validation or the test), then evaluated on 2006/2010/2014 with `python manage.py evaluar_f` ([`experimentos/resultados_f.json`](experimentos/resultados_f.json)).
+
+| Model (rolling validation) | log-loss | RPS | correct outcome | ECE |
+|---|---:|---:|---:|---:|
+| **Ensemble** | **0.8327** | **0.1601** | **62.8 %** | 0.020 |
+| Poisson GLM | 0.8366 | 0.1607 | 62.5 % | 0.019 |
+| LightGBM Poisson | 0.8382 | 0.1614 | 62.6 % | 0.017 |
+| Elo puro | 0.8409 | 0.1624 | 62.4 % | **0.015** |
+
+The ensemble is the first candidate that beats the Elo with paired `p` values of 0.095, 0.047 and 0.028 (two of three folds below 0.05). It is a modest but more consistent gain than any single model.
+
+**The one confirmatory test look** (F.3, `python manage.py evaluar_final`, JSON [`experimentos/resultados_finales.json`](experimentos/resultados_finales.json)):
+
+| Model | 2018+2022 log-loss | outcome | 2026 log-loss | outcome |
+|---|---:|---:|---:|---:|
+| Elo puro | 1.0201 | 51.6 % | **0.8541** | **66.3 %** |
+| Poisson GLM | 1.0117 | **53.1 %** | 0.8584 | 64.4 % |
+| LightGBM Poisson | 1.0122 | 52.3 % | 0.8677 | 64.4 % |
+| Ensemble | **1.0073** | 51.6 % | 0.8581 | 64.4 % |
+
+The ensemble improves log-loss on 2018+2022 but is **not** better than the Elo on 2026, and on the test no difference is significant (`p_dm` 0.391 and 0.754). **No model is promoted**: `MODEL_DIR` remains `lstm-2026-10-25`. The honest conclusion is that the Elo is still the reference; the ensemble is a candidate for log-loss, not a proven winner.
+
+**Draw decision (F.2):** the RPS rule predicts 26–30 % draws (the real rate is ~22 %), but it pays for it with 2–4 points of accuracy; the argmax rule predicts 0 % draws but has better accuracy. It is a trade-off, not a free improvement. The rule is implemented and tested (`decision_rps` in `evaluacion.py`), but not activated in the app. The detailed write-up is in [`docs/especificacion/04-resultados-c-f.md`](docs/especificacion/04-resultados-c-f.md).
+
 ---
 
 ## Roadmap
@@ -289,10 +333,10 @@ The fitted models are saved in `data/modelos/poisson_glm/`, `data/modelos/ordina
 - [x] The app predicts with the LSTM (`MODEL_DIR=lstm-2026-10-25`; `MODEL_DIR=medias` goes back to the baseline)
 - [x] Simulate from any stage of every World Cup, including the 1934 / 1938 replays and the 1950 final round
 - [x] 2026 format (48 teams, 12 groups, 8 best third-placed teams) with the official 495-combination FIFA table (`FormatoTorneo`)
-- [ ] Stage A: close the probability benchmark (ECE, validation intervals, frozen hold-out, Elo as an artifact) — 95 %, final test look reserved to F.3
+- [x] Stage A: close the probability benchmark (ECE, validation intervals, frozen hold-out, Elo as an artifact)
 - [x] Stage B: Poisson GLM, Dixon-Coles and ordinal regression, evaluated against the Elo (Poisson GLM leads by a hair, not significant)
-- [ ] Stage C: LightGBM and random forest, with variable importance
-- [ ] Stage F: ensemble, draw decision and the single final look
+- [x] Stage C: LightGBM and random forest, with variable importance (LightGBM Poisson close second, multiclass/RF worse)
+- [x] Stage F: ensemble, draw decision and the single final look (ensemble best on validation and 2018+2022, not on 2026; no model promoted)
 - [ ] Stage G: Monte Carlo table of the five most likely champions
 - [ ] Stage H: API, Docker/demo, UI, CI and portfolio
 - [x] Clean sheets per World Cup from the scores; shots and penalties imputed until the FBref data is downloaded (`proxy_desempegno`)
@@ -321,7 +365,7 @@ timeline
 
 **futbolInferencia** simula cualquier Mundial (1934 – 2026) desde la fase que elijas: cambias los resultados que quieras y un modelo de series temporales (LSTM) predice el resto del torneo partido a partido. Cada selección arrastra su rendimiento desde las eliminatorias y lo actualiza tras cada partido; los goles predichos se convierten en resultados con un modelo de Poisson.
 
-**Estado:** los datos, la simulación de los 22 Mundiales (incluido 2026) y el dataset de entrenamiento funcionan. La auditoría del 25 de octubre cambió el veredicto: el LSTM con Elo acierta el 51,6 % en 2018+2022 con el umbral que usa la app y el 63,5 % en 2026; el **Elo puro** obtiene 51,6 % y 66,3 %, así que el LSTM **no demuestra ser mejor**. La Etapa A (medir bien las probabilidades) está en curso y las siguientes etapas prueban modelos clásicos y de árboles antes de elegir el modelo final. La web usa el LSTM evaluado el 25 de octubre (`MODEL_DIR=lstm-2026-10-25`).
+**Estado:** los datos, la simulación de los 22 Mundiales (incluido 2026) y el dataset de entrenamiento funcionan. La auditoría del 25 de octubre cambió el veredicto: el LSTM con Elo acierta el 51,6 % en 2018+2022 con el umbral de la app y el 63,5 % en 2026; el **Elo puro** obtiene 51,6 % y 66,3 %, así que el LSTM **no demuestra ser mejor**. Las etapas A, B, C y F están implementadas y evaluadas: GLM de Poisson, Dixon-Coles, ordinal, LightGBM, Random Forest y un ensamble. El ensamble gana en validación y en 2018+2022, pero no en 2026; **no se promueve ningún modelo** y el Elo sigue siendo la referencia. La web usa el LSTM (`MODEL_DIR=lstm-2026-10-25`) hasta que G/H y una nueva validación justifiquen otro modelo.
 
 **Scraping:** empezó con un script de Selenium por Mundial, adaptado a cada página; cuando Wikipedia cambió su HTML varios dejaron de funcionar. Hoy un solo script (`etl/busca_grupos.py`) usa una regla basada en el contenido (columna «Pts» y título «Grupo…») y reproduce los 20 Mundiales. Detalles y lecciones en *Data collection* (arriba).
 

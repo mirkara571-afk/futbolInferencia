@@ -109,6 +109,41 @@ def probabilidades_deterministas(resultado, epsilon=EPSILON):
   return uno * (1 - epsilon) + epsilon / 3
 
 
+# RPS esperado de elegir cada accion (0 local, 1 empate, 2 visitante) cuando el resultado real es cada uno de los tres.
+# Se usa para la regla de decision de F.2: no siempre gana el argmax de probabilidad, porque el RPS castiga el orden.
+_RPS_ACCION = np.array([
+  [0.0, 0.5, 1.0],   # elegir local: 0 si gana local, 0,5 si empata, 1 si gana el visitante
+  [0.5, 0.0, 0.5],   # elegir empate
+  [1.0, 0.5, 0.0],   # elegir visitante
+])
+
+
+def decision_rps(probabilidades):
+  """
+  ¿QUE HACE?
+  Elige local / empate / visitante minimizando el RPS esperado con las probabilidades (n, 3) del predictor
+
+  ¿COMO LO HACE?
+  Para cada accion calcula el RPS esperado (matriz _RPS_ACCION por las probabilidades) y toma la accion de menor valor;
+  a diferencia del argmax, puede elegir empate cuando las probabilidades estan parejas, que es lo que el RPS premia
+
+  Returns:
+
+    - (n,) con 1 local / 0 empate / -1 visitante
+  """
+  probs = np.asarray(probabilidades, dtype=float)
+  probs = probs / probs.sum(axis=1, keepdims=True)
+  esperado = _RPS_ACCION @ probs.T                    # (3, n): accion x partido
+  accion = esperado.argmin(axis=0)
+  return np.where(accion == 0, 1, np.where(accion == 1, 0, -1))
+
+
+def decision_acierto(probabilidades):
+  """(n, 3) probabilidades -> (n,) resultado mas probable: 1 local / 0 empate / -1 visitante"""
+  accion = np.asarray(probabilidades, dtype=float).argmax(axis=1)
+  return np.where(accion == 0, 1, np.where(accion == 1, 0, -1))
+
+
 def metricas_probabilidad(real, probs, medias=True):
   """
   ¿QUE HACE?
