@@ -202,6 +202,8 @@ python manage.py test fases
 |---|---|
 | `python manage.py construir_dataset` | Builds `data/datasets/partidos_features.csv` (≈ 8,800 matches, takes a few minutes) for training; `--ciclo internacionales` uses every national-team match between World Cups instead of only the qualifiers |
 | `python manage.py evaluar_modelos` | Phase 2 in one command (~1 h on 4 CPU cores): picks the LSTM configuration, context and draw threshold with temporal validation, tests it on the 2018 + 2022 and 2026 World Cups against the three baselines, saves `experimentos/resultados_baseline.json` and the model in `data/modelos/lstm-<date>/`. `--solo-validacion` stops after the rolling validation, writes `experimentos/resultados_validacion.json` and never touches the hold-out |
+| `python manage.py evaluar_b` | Rolling validation of the Stage B models (Poisson GLM, ordinal, Dixon-Coles with `xi = 0`, `0.05`, `0.1`) against the Elo; saves `experimentos/resultados_b.json`. It never touches the hold-out |
+| `python manage.py entrenar_b` | Trains and saves the three Stage B models up to `--hasta` (default 2022) in `data/modelos/<backend>/`, with `esquema.json` (and `coeficientes.json` for the GLM). It does not change `MODEL_DIR` |
 | `python manage.py snapshot_consulta` | Photo of `consulta_general` for 2018 and 1986 (116 matches): `--guardar` writes `experimentos/snapshot_consulta.json`, `--verificar` fails if the simulation changes; used as the safety net for the H.2 refactor |
 | `python manage.py entrenar_predictor` | Retrains the baseline predictor from that file into `data/modelos/medias/` (`--hasta 2010` to leave later World Cups out) |
 | `python etl/busca_internacionales.py` | Rebuilds `data/partidos/internacionales.csv` (≈ 50,000 national-team matches since 1872, with competition type and neutral venue) from martj42/international_results, translating team names to the Spanish ones used in the database |
@@ -256,6 +258,25 @@ Temporal split, nothing from the future: the configuration is chosen training on
 
 > **Hold-out status:** 2018+2022 and 2026 have already been looked at several times (three different 2026 figures are public). They are **historical, not virgin**. The one confirmatory look is reserved for Stage F.3; see [`docs/especificacion/registro-de-miradas.md`](docs/especificacion/registro-de-miradas.md).
 
+### Stage B: classic models (30-October-2026)
+
+The three classic models were evaluated on the same rolling validation (2006, 2010, 2014), with the same metrics as Stage A and **without touching 2018/2022/2026**. Reproduce with `python manage.py evaluar_b`; the JSON is [`experimentos/resultados_b.json`](experimentos/resultados_b.json). The full write-up, definitions and limitations are in [`docs/especificacion/03-resultados-b.md`](docs/especificacion/03-resultados-b.md).
+
+| Model | log-loss | RPS | correct outcome | ECE |
+|---|---:|---:|---:|---:|
+| **Poisson GLM** (Elo, home, match type, rate_GF/rate_GC, gkps, mos) | **0.8366** | **0.1607** | **62.5 %** | 0.019 |
+| **Elo puro** (reference) | 0.8409 | 0.1624 | 62.4 % | **0.015** |
+| Dixon-Coles, `xi = 0.05` | 0.8520 | 0.1657 | 61.8 % | 0.023 |
+| Dixon-Coles, `xi = 0.10` | 0.8534 | 0.1655 | 61.5 % | 0.021 |
+| Ordinal logit | 0.8927 | 0.1693 | 61.3 % | 0.065 |
+
+- **The Poisson GLM is the best of Stage B**, but the improvement over the Elo is **small and not yet statistically confirmed**: the paired log-loss difference is −0.0043 on average, with Diebold-Mariano `p` of 0.198, 0.747 and 0.073 in the three folds. The RPS improvement is also small (one fold reaches `p = 0.009`). It is a candidate, not a winner.
+- **Dixon-Coles does not beat the Elo here.** Its `rho` is negative (around −0.05), which corrects low-score dependence, but with the current features and `xi` it does not improve log-loss. It is useful as an explainable benchmark and for its draw probabilities.
+- **The ordinal model is the weakest**: its probabilities are poorly calibrated (ECE 0.065) even though its accuracy is close. It needs more informative features or a different link before it is useful.
+- **Draws:** the real rate in the 2014 fold is 22.5 %. The mean predicted draw probability is around 20–22 %, but the *most likely* outcome is almost never a draw (0 % for Elo/GLM/ordinal, 1.6 % for Dixon-Coles). That is the problem Stage F.2 must solve; it is not solved by these models.
+
+The fitted models are saved in `data/modelos/poisson_glm/`, `data/modelos/ordinal/` and `data/modelos/dixon_coles/` with their `esquema.json`; `Poisson GLM` also has `coeficientes.json`. They are **not** the app's model yet: `MODEL_DIR` still points to the LSTM until F.3 chooses the final candidate.
+
 ---
 
 ## Roadmap
@@ -268,8 +289,8 @@ Temporal split, nothing from the future: the configuration is chosen training on
 - [x] The app predicts with the LSTM (`MODEL_DIR=lstm-2026-10-25`; `MODEL_DIR=medias` goes back to the baseline)
 - [x] Simulate from any stage of every World Cup, including the 1934 / 1938 replays and the 1950 final round
 - [x] 2026 format (48 teams, 12 groups, 8 best third-placed teams) with the official 495-combination FIFA table (`FormatoTorneo`)
-- [ ] Stage A: close the probability benchmark (ECE, validation intervals, frozen hold-out, Elo as an artifact) — in progress
-- [ ] Stage B: Poisson GLM, Dixon-Coles and ordinal regression
+- [ ] Stage A: close the probability benchmark (ECE, validation intervals, frozen hold-out, Elo as an artifact) — 95 %, final test look reserved to F.3
+- [x] Stage B: Poisson GLM, Dixon-Coles and ordinal regression, evaluated against the Elo (Poisson GLM leads by a hair, not significant)
 - [ ] Stage C: LightGBM and random forest, with variable importance
 - [ ] Stage F: ensemble, draw decision and the single final look
 - [ ] Stage G: Monte Carlo table of the five most likely champions

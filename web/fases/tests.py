@@ -9,11 +9,40 @@ from django.test import SimpleTestCase
 from .dataset import CATEGORIAS, CICLO_INTERNACIONALES, N_CONTEXTO, construir_dataset, construir_secuencias, mapa_paises
 from .modulo import ALL_METRICS, BASE_METRICS, COLS_MODELO_POR_EQUIPO, METRICAS_ABSTRACTAS, OPTIONAL_METRICS, historico_abstractas
 from .evaluacion import comparar, ece, intervalos_bootstrap, metricas, metricas_por_partido, metricas_probabilidad, particion, probabilidades_deterministas, tabla_calibracion
+from .modelos_estadisticos import PredictorDixonColes, PredictorOrdinal, PredictorPoissonGLM
 from .predictores import Lote, PredictorElo, PredictorEmpate, PredictorKeras, PredictorMasPuntos, PredictorMedias, cargar_predictor, guardar_predictor, lote_desde_entrada
 
 
 def partidos_df(filas):
   return pd.DataFrame(filas, columns=["home", "away", "score_0", "score_1", "agno"])
+
+
+def dataset_estadistico(n=120, semilla=0):
+  """Dataset sintetico con las columnas que usan los modelos de la Etapa B (sin tocar la base de datos)"""
+  rng = np.random.default_rng(semilla)
+  equipos = list(range(6))
+  filas = []
+  for _ in range(n):
+    home, away = rng.choice(equipos, 2, replace=False)
+    elo_0, elo_1 = 1500 + rng.normal(0, 120), 1500 + rng.normal(0, 120)
+    local_0 = int(rng.random() < 0.45)
+    local_1 = 0
+    fuerza = (elo_0 - elo_1) / 400 + 0.3 * local_0
+    goles_0 = int(rng.poisson(np.exp(0.2 + fuerza)))
+    goles_1 = int(rng.poisson(np.exp(0.2 - fuerza)))
+    filas.append({
+      "home": f"E{home}", "away": f"E{away}", "home_id": int(home), "away_id": int(away),
+      "agno": int(rng.choice([2002, 2006, 2010, 2014])), "categoria": rng.choice(["mundial", "eliminatoria_mundial"]),
+      "neutral": int(not local_0), "local_0": local_0, "local_1": local_1,
+      "elo_0": elo_0, "elo_1": elo_1, "fase_final": int(rng.random() < 0.2),
+      "rate_GF_0": rng.uniform(5, 20), "rate_GF_1": rng.uniform(5, 20),
+      "rate_GC_0": rng.uniform(5, 20), "rate_GC_1": rng.uniform(5, 20),
+      "gkps_0": rng.uniform(20, 80), "gkps_1": rng.uniform(20, 80),
+      "mos_0": rng.uniform(20, 80), "mos_1": rng.uniform(20, 80),
+      "mms_0": rng.uniform(20, 80), "mms_1": rng.uniform(20, 80),
+      "goles_0": goles_0, "goles_1": goles_1,
+    })
+  return pd.DataFrame(filas)
 
 
 PROXY_VACIO = pd.DataFrame(columns=["pais", "agno", *METRICAS_ABSTRACTAS])
@@ -349,6 +378,50 @@ class PredictorEloTests(SimpleTestCase):
     lote = Lote(self.tabla(5, semilla=1))
     np.testing.assert_allclose(cargado.probabilidades(lote), p.probabilidades(lote))
     np.testing.assert_allclose(cargado.predecir(lote), p.predecir(lote))
+
+
+class ModelosEstadisticosTests(SimpleTestCase):
+  """Etapa B: contrato, formas, probabilidades y roundtrip de esquema de los tres modelos"""
+
+  def setUp(self):
+    self.ds = dataset_estadistico()
+
+  def test_poisson_glm_contrato(self):
+    p = PredictorPoissonGLM.entrenar(self.ds)
+    salida = p.predecir(Lote(self.ds))
+    self.assertEqual(salida.shape, (len(self.ds), 2))
+    self.assertTrue(np.isfinite(salida).all() and (salida > 0).all())
+    with tempfile.TemporaryDirectory() as carpeta:
+      guardar_predictor(p, carpeta)
+      cargado, esquema = cargar_predictor(carpeta)
+      self.assertEqual(esquema["backend"], "poisson_glm")
+      np.testing.assert_allclose(cargado.predecir(Lote(self.ds)), salida, rtol=1e-10)
+
+  def test_ordinal_probabilidades_y_roundtrip(self):
+    p = PredictorOrdinal.entrenar(self.ds)
+    probs = p.probabilidades(Lote(self.ds))
+    self.assertEqual(probs.shape, (len(self.ds), 3))
+    np.testing.assert_allclose(probs.sum(axis=1), 1, rtol=1e-10)
+    self.assertTrue((probs >= 0).all())
+    with tempfile.TemporaryDirectory() as carpeta:
+      guardar_predictor(p, carpeta)
+      cargado, _ = cargar_predictor(carpeta)
+      np.testing.assert_allclose(cargado.probabilidades(Lote(self.ds)), probs, rtol=1e-10)
+      np.testing.assert_allclose(cargado.predecir(Lote(self.ds)), p.predecir(Lote(self.ds)), rtol=1e-10)
+
+  def test_dixon_coles_probabilidades_y_roundtrip(self):
+    p = PredictorDixonColes.entrenar(self.ds, xi=0.1)
+    salida = p.predecir(Lote(self.ds))
+    probs = p.probabilidades(Lote(self.ds))
+    self.assertEqual(salida.shape, (len(self.ds), 2))
+    self.assertTrue(np.isfinite(salida).all() and (salida > 0).all())
+    np.testing.assert_allclose(probs.sum(axis=1), 1, rtol=1e-10)
+    with tempfile.TemporaryDirectory() as carpeta:
+      guardar_predictor(p, carpeta)
+      cargado, esquema = cargar_predictor(carpeta)
+      self.assertEqual(esquema["backend"], "dixon_coles")
+      np.testing.assert_allclose(cargado.probabilidades(Lote(self.ds)), probs, rtol=1e-10)
+      np.testing.assert_allclose(cargado.predecir(Lote(self.ds)), salida, rtol=1e-10)
 
 
 class PredictorKerasTests(SimpleTestCase):
