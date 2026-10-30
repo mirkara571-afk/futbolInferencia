@@ -129,6 +129,37 @@ Para cada acción (local, empate, visitante) se calcula el RPS esperado con las 
 | ¿La regla RPS resuelve los empates? | Sube los empates al 26–30 %, pero baja 2–4 puntos el acierto |
 | ¿Qué variable manda? | Elo, seguido de la defensa del rival, la localía y las métricas de portería/ataque |
 
+## 5.1 Estado y % restante
+
+### Etapas de la spec v2
+
+| Etapa | Hecho | Falta |
+|---|---:|---:|
+| A · Medición | 100 % | 0 % |
+| B · Modelos clásicos | 100 % | 0 % |
+| C · Árboles | 100 % | 0 % |
+| D · Red a fondo | 10 % | 90 % |
+| E · Datos nuevos | 10 % | 90 % |
+| F · Ensamble y elección | 100 % | 0 % |
+| G · 5 campeones | 0 % | 100 % |
+| H · Producto | 0 % | 100 % |
+
+**A–H: ~52 % hecho, ~48 % pendiente.** Por esfuerzo, lo que queda está sobre todo en H (API, Docker/demo, UI, CI), G (Montecarlo) y E.1/E.2 (datos reales); D.4/D.5 es opcional.
+
+### Fases de la guía v1
+
+| Fase | Hecho | Falta |
+|---|---:|---:|
+| 0 · Seguridad y arranque | 95 % | 5 % |
+| 1 · README, dependencias y orden | 100 % | 0 % |
+| 2 · Medir antes de cambiar | 100 % | 0 % |
+| 3 · Propuestas / datos | 85 % | 15 % |
+| 4 · Refactor modular | 0 % | 100 % |
+| 5 · Docker, UI, CI y despliegue | 0 % | 100 % |
+| 6 · Portafolio | 0 % | 100 % |
+
+**Base acumulada (fases 0–3): ~90 %.**
+
 ## 6. Visión y siguientes pasos
 
 La conclusión de C/F refuerza la de B: **el fútbol es ruidoso y el Elo es muy difícil de batir**. Las mejoras son pequeñas y no siempre se sostienen fuera de la validación. Por eso:
