@@ -321,6 +321,13 @@ The ensemble improves log-loss on 2018+2022 but is **not** better than the Elo o
 
 **Draw decision (F.2):** the RPS rule predicts 26–30 % draws (the real rate is ~22 %), but it pays for it with 2–4 points of accuracy; the argmax rule predicts 0 % draws but has better accuracy. It is a trade-off, not a free improvement. The rule is implemented and tested (`decision_rps` in `evaluacion.py`), but not activated in the app. The detailed write-up is in [`docs/especificacion/04-resultados-c-f.md`](docs/especificacion/04-resultados-c-f.md).
 
+### API, Docker and CI (H.1, H.3, H.6)
+
+- **API:** `POST /api/prediccion/` accepts the same `recepcion` as the web and reuses `predecir_recepcion`; `GET /api/schema/` serves the OpenAPI schema and `GET /api/docs/` the Swagger UI. `POST /api/probabilidades/` is reserved for Stage G and currently returns **501**.
+- **Docker:** `Dockerfile` (Python 3.12, `tensorflow-cpu`, gunicorn, WhiteNoise) and `docker-compose.yml` (PostgreSQL + web). Validate with `docker compose config`; to run: `docker compose up --build`.
+- **CI:** `.github/workflows/ci.yml` runs Ruff (syntax/undefined names), `manage.py check`, and the 60 tests against PostgreSQL 16.
+- **Not verified here:** the Docker daemon is not available in this environment, so the image was **not built**; `docker compose config` was validated. The GitHub Actions workflow has not run yet. Details in [`docs/especificacion/05-api-docker-ci.md`](docs/especificacion/05-api-docker-ci.md).
+
 ---
 
 ## Roadmap
@@ -338,12 +345,14 @@ The ensemble improves log-loss on 2018+2022 but is **not** better than the Elo o
 - [x] Stage C: LightGBM and random forest, with variable importance (LightGBM Poisson close second, multiclass/RF worse)
 - [x] Stage F: ensemble, draw decision and the single final look (ensemble best on validation and 2018+2022, not on 2026; no model promoted)
 - [ ] Stage G: Monte Carlo table of the five most likely champions
-- [ ] Stage H: API, Docker/demo, UI, CI and portfolio
+- [x] Stage H.1: API `POST /api/prediccion/` + Swagger (`/api/docs/`); `/api/probabilidades/` waits for G
+- [x] Stage H.3: `Dockerfile` and `docker-compose.yml` (compose validated; image not built in this environment)
+- [x] Stage H.6: GitHub Actions workflow with Ruff, `manage.py check` and tests (not run yet)
+- [ ] Stage H.2/H.4/H.5/H.7: refactor, UI, Telegram bot and portfolio
 - [x] Clean sheets per World Cup from the scores; shots and penalties imputed until the FBref data is downloaded (`proxy_desempegno`)
 - [ ] Run `etl/busca_metricas.py --todos` to replace the imputed penalties (1998+) and shots on target (2018+) with real data
 - [ ] Split `modulo.py` into smaller modules with tests
-- [ ] Docker, public demo and CI
-- [ ] Natural-language explanations of each prediction (LLM)
+- [ ] Public demo and portfolio links
 
 <details>
 <summary>Project history</summary>

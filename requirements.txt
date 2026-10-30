@@ -9,5 +9,7 @@ scipy==1.18.1
 statsmodels==0.15.0
 lightgbm==4.7.0
 scikit-learn==1.9.1
+djangorestframework==3.18.3
+drf-spectacular==0.28.0
 # el paquete completo (en Windows corre solo en CPU); para Docker en Linux se puede cambiar por tensorflow-cpu, mas liviano
 tensorflow==2.21.0

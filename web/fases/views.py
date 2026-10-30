@@ -86,6 +86,42 @@ def procesar_recepcion_0(request):
 
     return(render(request, "prediccion.html", {"reglamentos_terceros": reglamentos_oficiales(), "catalogo_metricas": catalogo_metricas()}))
 
+def predecir_recepcion(data):
+    """
+    Ejecuta una prediccion completa a partir del JSON que envia la web o la API.
+
+    - data: {"recepcion": [...], "reglamento": ..., "drop_metricas": [...], "metricas_opcionales": [...]}
+
+    - Returns: DataFrame de respuesta de consulta_general (con attrs)
+    - Lanza ValueError o ReglamentoInvalido si la peticion no es valida
+    """
+    recepcion = data.get('recepcion', None)
+    if not recepcion:
+        raise ValueError("Falta 'recepcion'")
+    reglamento = leer_reglamento(recepcion[0], data.get('reglamento'))
+    drop_metricas = leer_metricas(data.get('drop_metricas'), BASE_METRICS, "drop_metricas", DROP_METRICS)
+    metricas_opcionales = leer_metricas(data.get('metricas_opcionales'), OPTIONAL_METRICS, "metricas_opcionales", OPTIONAL_METRICS)
+    validar_valores_neutros(drop_metricas, metricas_opcionales)
+    recepc = formar_dataset_consulta(recepcion)
+    if recepcion[1] == "Fase de Grupos":
+        recepc["agno"] = int(recepcion[0])
+    return consulta_general(dic_torneos[recepcion[1]] + recepcion[0], recepc, reglamento_terceros=reglamento,
+                            drop_metricas=drop_metricas, metricas_opcionales=metricas_opcionales)
+
+
+def _respuesta_json(respuesta, recepcion):
+    """DataFrame de consulta_general -> JSON de la web/API (partidos, terceros y llave)"""
+    extras = dict(respuesta.attrs)
+    respuesta = respuesta.reset_index(drop=True)
+    partidos = [{"home": row.home, "score": f"{int(row.score_0)}:{int(row.score_1)}", "away": row.away}
+                for row in respuesta.itertuples()]
+    payload = {"year": int(recepcion[0]), "partidos": partidos}
+    for clave in ("mejores_terceros", "llave_octavos"):
+        if clave in extras:
+            payload[clave] = json.loads(extras[clave].to_json(orient="records"))
+    return payload
+
+
 def procesar_recepcion_1(request):
     """Vista usada al precionar el boton "predecir" """
     if request.method == 'POST':
@@ -94,47 +130,17 @@ def procesar_recepcion_1(request):
             recepcion = data.get('recepcion', None)
             if recepcion:
                 try:
-                    reglamento = leer_reglamento(recepcion[0], data.get('reglamento'))
-                    drop_metricas = leer_metricas(data.get('drop_metricas'), BASE_METRICS, "drop_metricas", DROP_METRICS)
-                    metricas_opcionales = leer_metricas(data.get('metricas_opcionales'), OPTIONAL_METRICS, "metricas_opcionales", OPTIONAL_METRICS)
-                    validar_valores_neutros(drop_metricas, metricas_opcionales)
+                    respuesta = predecir_recepcion(data)
                 except (ReglamentoInvalido, ValueError) as error:
                     return JsonResponse({'error': str(error)}, status=400)
-
-                recepc = formar_dataset_consulta(recepcion)
-                if recepcion[1]=="Fase de Grupos":
-                    recepc["agno"] = int(recepcion[0])
-
-                respuesta = consulta_general(dic_torneos[recepcion[1]]+recepcion[0], recepc, reglamento_terceros=reglamento,
-                                             drop_metricas=drop_metricas, metricas_opcionales=metricas_opcionales)
-                extras = dict(respuesta.attrs)
-                respuesta = respuesta.reset_index(drop=True)
-                respuesta.score_0 = respuesta.score_0.astype('int64')
-                respuesta.score_1 = respuesta.score_1.astype('int64')
-                score = pd.DataFrame()
-                for des0, des1 in zip(respuesta.score_0, respuesta.score_1):
-                    score = pd.concat([score, pd.Series(f"{des0}:{des1}")], axis=0)
-                
-                score = score.reset_index()[0]
-                respuesta = respuesta.drop(["score_0", "score_1"], axis=1)
-                print(respuesta)
-                print(score)
-                respuesta = pd.DataFrame(data={"home":respuesta.home, "score": score,"away":respuesta.away}).reset_index(drop=True)
-                respuesta["year"]=int(recepcion[0])
-                print(f"Esta es mi respuesta\n{respuesta}")
-
-                json_partidos = respuesta.to_json(orient='records')
-
-                context = {"partidos": json_partidos}
-                for clave in ("mejores_terceros", "llave_octavos"):
-                    if clave in extras:
-                        context[clave] = extras[clave].to_json(orient='records')
-
-                return JsonResponse(context)
-            
+                # la web espera los campos como strings JSON (los parsea en el template); la API los devuelve como listas
+                payload = _respuesta_json(respuesta, recepcion)
+                for clave in ("partidos", "mejores_terceros", "llave_octavos"):
+                    if clave in payload:
+                        payload[clave] = json.dumps(payload[clave], ensure_ascii=False)
+                return JsonResponse(payload)
         except json.JSONDecodeError as e:
             print(f"Error al decodificar JSON: {e}")
- 
             return JsonResponse({'error': 'JSON inválido'}, status=400)
 
     return JsonResponse({'error': 'Método no permitido'}, status=405)

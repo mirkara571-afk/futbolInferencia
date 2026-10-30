@@ -1,10 +1,11 @@
 import json
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 
 from .dataset import CATEGORIAS, CICLO_INTERNACIONALES, N_CONTEXTO, construir_dataset, construir_secuencias, mapa_paises
 from .modulo import ALL_METRICS, BASE_METRICS, COLS_MODELO_POR_EQUIPO, METRICAS_ABSTRACTAS, OPTIONAL_METRICS, historico_abstractas
@@ -659,3 +660,49 @@ class FormatoTorneoTests(SimpleTestCase):
     oficial["llave"] = oficial["llave"][:-1]
     with self.assertRaisesRegex(ReglamentoInvalido, "16 partidos"):
       ReglamentoTerceros.desde_json(2026, oficial)
+
+
+class APITests(SimpleTestCase):
+
+  @override_settings(ALLOWED_HOSTS=["testserver"])
+  def test_prediccion_invalida_devuelve_400(self):
+    respuesta = self.client.post("/api/prediccion/", data=json.dumps({}), content_type="application/json")
+    self.assertEqual(respuesta.status_code, 400)
+    self.assertIn("recepcion", respuesta.json())
+
+  @override_settings(ALLOWED_HOSTS=["testserver"])
+  @patch("fases.api.views.predecir_recepcion")
+  def test_prediccion_api_reutiliza_la_web(self, predecir):
+    falsa = pd.DataFrame([{"home": "A", "score_0": 1, "score_1": 0, "away": "B"}])
+    falsa.attrs = {}
+    predecir.return_value = falsa
+    respuesta = self.client.post("/api/prediccion/",
+                                 data=json.dumps({"recepcion": ["2018", "Fase de Grupos", ["A", 0, "B", 0, 0]]}),
+                                 content_type="application/json")
+    self.assertEqual(respuesta.status_code, 200)
+    self.assertEqual(respuesta.json()["partidos"], [{"home": "A", "score": "1:0", "away": "B"}])
+
+  @override_settings(ALLOWED_HOSTS=["testserver"])
+  @patch("fases.views.predecir_recepcion")
+  def test_web_sigue_devolviendo_strings_json(self, predecir):
+    falsa = pd.DataFrame([{"home": "A", "score_0": 1, "score_1": 0, "away": "B"}])
+    falsa.attrs = {}
+    predecir.return_value = falsa
+    respuesta = self.client.post("/procesar_recepcion_1/",
+                                  data=json.dumps({"recepcion": ["2018", "Fase de Grupos", ["A", 0, "B", 0, 0]]}),
+                                  content_type="application/json")
+    self.assertEqual(respuesta.status_code, 200)
+    self.assertIsInstance(respuesta.json()["partidos"], str)
+    self.assertEqual(json.loads(respuesta.json()["partidos"])[0]["score"], "1:0")
+
+  @override_settings(ALLOWED_HOSTS=["testserver"])
+  def test_probabilidades_pendiente_devuelve_501(self):
+    respuesta = self.client.post("/api/probabilidades/", data=json.dumps({"recepcion": ["2018", "Fase de Grupos"]}),
+                                 content_type="application/json")
+    self.assertEqual(respuesta.status_code, 501)
+
+  @override_settings(ALLOWED_HOSTS=["testserver"])
+  def test_schema_openapi(self):
+    respuesta = self.client.get("/api/schema/")
+    self.assertEqual(respuesta.status_code, 200)
+    self.assertIn(b"openapi", respuesta.content.lower())
