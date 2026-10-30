@@ -7,8 +7,8 @@ import pandas as pd
 from django.test import SimpleTestCase
 
 from .dataset import CATEGORIAS, CICLO_INTERNACIONALES, N_CONTEXTO, construir_dataset, construir_secuencias, mapa_paises
-from .modulo import ALL_METRICS, COLS_MODELO_POR_EQUIPO, METRICAS_ABSTRACTAS, historico_abstractas
-from .evaluacion import comparar, intervalos_bootstrap, metricas, metricas_por_partido, metricas_probabilidad, particion, probabilidades_deterministas, tabla_calibracion
+from .modulo import ALL_METRICS, BASE_METRICS, COLS_MODELO_POR_EQUIPO, METRICAS_ABSTRACTAS, OPTIONAL_METRICS, historico_abstractas
+from .evaluacion import comparar, ece, intervalos_bootstrap, metricas, metricas_por_partido, metricas_probabilidad, particion, probabilidades_deterministas, tabla_calibracion
 from .predictores import Lote, PredictorElo, PredictorEmpate, PredictorKeras, PredictorMasPuntos, PredictorMedias, cargar_predictor, guardar_predictor, lote_desde_entrada
 
 
@@ -163,6 +163,37 @@ class PredictoresTests(SimpleTestCase):
     self.assertEqual(PredictorMedias(1.5, 1.0).predecir(lote_desde_entrada(X)).shape, (2, 2))
 
 
+class ValorNeutroTests(SimpleTestCase):
+  """A-01: apagar una metrica no puede romper la prediccion; el hueco se rellena con la media del entrenamiento"""
+
+  def features(self):
+    return {m: pd.Series([1.0, 2.0]) for m in ALL_METRICS}
+
+  def test_todas_las_metricas_tienen_valor_neutro(self):
+    from .modulo import VALOR_NEUTRO
+    self.assertEqual(list(VALOR_NEUTRO), ALL_METRICS)
+    self.assertTrue(all(isinstance(VALOR_NEUTRO[m], float) for m in ALL_METRICS))
+
+  def test_validar_no_falla_con_metricas_apagadas(self):
+    from .modulo import validar_valores_neutros
+    # todas las base descartadas y todas las opcionales rechazadas: antes lanzaba ValueError por VALOR_NEUTRO=None
+    validar_valores_neutros(BASE_METRICS, [])
+
+  def test_neutralizar_solo_lo_apagado(self):
+    from .modulo import VALOR_NEUTRO, neutralizar
+    salida = neutralizar(self.features(), ["GF"], OPTIONAL_METRICS)
+    self.assertEqual(salida["GF"].tolist(), [VALOR_NEUTRO["GF"]] * 2)
+    self.assertEqual(salida["GC"].tolist(), [1.0, 2.0])          # no se toca
+    self.assertEqual(salida["PTS"].tolist(), [1.0, 2.0])
+
+  def test_neutralizar_opcionales_no_aceptadas(self):
+    from .modulo import VALOR_NEUTRO, neutralizar
+    salida = neutralizar(self.features(), [], ["gkps"])
+    self.assertEqual(salida["gkps"].tolist(), [1.0, 2.0])        # aceptada: se conserva
+    for m in ("mds", "mos", "mms", "rate_GC", "rate_GF"):
+      self.assertEqual(salida[m].tolist(), [VALOR_NEUTRO[m]] * 2)
+
+
 class CicloInternacionalesTests(SimpleTestCase):
 
   def test_ciclo_por_fechas(self):
@@ -237,6 +268,15 @@ class EvaluacionTests(SimpleTestCase):
     # 0,10 y 0,15 caen en el tramo [0,1 0,2): ninguno de los dos paso
     self.assertEqual((tabla[1]["n"], tabla[1]["frecuencia"]), (2, 0.0))
     self.assertIsNone(tabla[9]["probabilidad"])
+
+  def test_ece_a_mano(self):
+    # un partido que gana el local con (0,5 0,3 0,2): cada probabilidad cae en un tramo distinto y solo la primera paso
+    # ECE = (|0,5-1| + |0,3-0| + |0,2-0|) / 3 = 1/3
+    self.assertAlmostEqual(ece([1], [[0.5, 0.3, 0.2]]), 1 / 3)
+    # probabilidades perfectas (1 al resultado que paso): ECE = 0
+    self.assertAlmostEqual(ece([1, 0, -1], [[1, 0, 0], [0, 1, 0], [0, 0, 1]]), 0.0)
+    # y "metricas" lo incluye para que viaje en el JSON de evaluacion
+    self.assertIn("ece", metricas([[1, 0]], [[1.2, 0.8]]))
 
   def test_metricas_es_la_media_por_partido(self):
     goles, lambdas = [[2, 1], [0, 0], [1, 3]], [[1.5, 0.8], [1.0, 1.2], [0.9, 1.6]]
@@ -402,6 +442,18 @@ class ContextoTests(SimpleTestCase):
     self.assertEqual((antes_0[0], antes_1[0]), (1500, 1500))
     self.assertAlmostEqual(despues_0[0], 1500 + 20 * (1 - 1 / (1 + 10 ** (-100 / 400))))
     self.assertAlmostEqual(despues_0[0] + despues_1[0], 3000)
+
+  def test_elo_anterior_al_partido(self):
+    from .contexto import calcular_elo
+    # el Elo con el que se predice el 2do partido es el de despues del 1ro, nunca el de despues del 2do
+    antes_0, antes_1, despues_0, despues_1 = calcular_elo(self.internacionales([
+      ["2000-01-01", 2000, "A", "B", 1, 0, "amistoso", 0],
+      ["2000-02-01", 2000, "B", "A", 2, 2, "amistoso", 0],
+    ]))
+    self.assertEqual(antes_0[0], 1500)                       # el futuro no toca la primera fila
+    # A es visitante en el 2do partido: su Elo previo es el que tenia tras el 1ro; B es local y lo mismo
+    self.assertAlmostEqual(antes_1[1], despues_0[0])
+    self.assertAlmostEqual(antes_0[1], despues_1[0])
 
   def test_contexto_del_mundial(self):
     from .contexto import contexto_de_mundiales

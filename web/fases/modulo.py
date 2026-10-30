@@ -33,9 +33,16 @@ METRICAS_ABSTRACTAS = ["VI", "SOT", "PKATT", "PKATTALLOW"]
 # 2: gkps, mds, mos y mms dividen el historico abstracto por sus propios partidos (PJ del historico) y van de 0 a 100
 VERSION_METRICAS = 2
 
-# valor que recibe una métrica descartada o no aceptada: la media de esa columna en el set de entrenamiento
-# PEND rellenar desde el notebook de entrenamiento con X_tr (mismo orden que ALL_METRICS)
-VALOR_NEUTRO = {m: None for m in ALL_METRICS}
+# valor que recibe una métrica descartada o no aceptada: la media de esa columna en el set de entrenamiento.
+# Calculado el 2026-10-29 sobre data/datasets/partidos_features.csv con agno <= 2014 (6.983 partidos, ambos lados):
+# es el corte con el que se entrenan las pruebas 2018/2022, así el valor neutro no ve ningún año de prueba.
+# Para recalcularlo, promedia <metrica>_0 y <metrica>_1 del dataset filtrado (ver docs/especificacion/02-plan-tecnico.md, A-01).
+VALOR_NEUTRO = {
+  "PTS": 8.232923, "PJ": 4.787126, "PG": 2.389589, "PP": 1.333381, "PE": 1.064156,
+  "GF": 8.278963, "GC": 5.251826, "D": 3.027137,
+  "gkps": 41.044991, "mds": 44.974489, "mos": 45.788291, "mms": 43.036899,
+  "rate_GC": 10.437478, "rate_GF": 14.971177,
+}
 
 # progreso por país (id) de METRICAS_ABSTRACTAS; lo carga (reiniciar_opcionales) y lo actualiza (calculo_metricas_1)
 opcionales = None
