@@ -15,6 +15,7 @@ from fases.predictores import PredictorElo, PredictorEmpate, PredictorKeras, Pre
 RAIZ = Path(settings.BASE_DIR).parent
 DATASET = RAIZ / "data" / "datasets" / "partidos_features.csv"
 RESULTADOS = RAIZ / "experimentos" / "resultados_baseline.json"
+VALIDACION = RAIZ / "experimentos" / "resultados_validacion.json"
 
 KS = [1, 3, 5, 8, 12]
 SEMILLAS = [0, 1, 2]
@@ -48,6 +49,11 @@ def con_incertidumbre(resultado, por_partido, referencia=None):
   return {**resultado, **extra}
 
 
+def detalle_pliegue(resultado, por_partido):
+  """Metricas de un pliegue de validacion con su intervalo bootstrap; "calibracion" y "ece" ya vienen en (resultado)"""
+  return {**resultado, "intervalos": intervalos_bootstrap(por_partido)}
+
+
 class Command(BaseCommand):
   """
   ¿QUE HACE?
@@ -64,7 +70,9 @@ class Command(BaseCommand):
 
     0.3) Umbral de empate: el que maximiza el acierto de resultado en el ultimo pliegue (ciclo 2014), con sus modelos
 
-    0.4) Las lineas base y el Elo puro se miden en los mismos pliegues, para comparar la validacion
+    0.4) Las lineas base y el Elo puro se miden en los mismos pliegues, con intervalos bootstrap, calibracion, ECE y comparacion pareada contra el Elo; eso queda guardado en cada pliegue, no solo la media
+
+  0.5) Con --solo-validacion se detiene aqui: escribe experimentos/resultados_validacion.json con todo el detalle de la validacion y no ejecuta la prueba 2018/2022/2026 ni guarda el modelo de la app
 
   1-) Prueba: reentrena la configuracion elegida con los ciclos hasta 2014 (epocas fijas = media de las mejores epocas de la seleccion) y la mide en los partidos de mundial de 2018 y 2022, igual que las lineas base (medias y Elo entrenados hasta 2014, mas puntos y siempre 1-1). Cada metrica lleva su intervalo del 95 % por bootstrap, y cada modelo su comparacion pareada de log-loss y RPS (bootstrap pareado y Diebold-Mariano) y McNemar del acierto contra el Elo puro; el LSTM con la semilla 0, la que se guarda
 
@@ -77,15 +85,29 @@ class Command(BaseCommand):
   help = "Seleccion del LSTM por validacion movil, prueba contra lineas base y Elo puro con intervalos; resultados en experimentos/resultados_baseline.json"
   requires_system_checks = []
 
+  def add_arguments(self, parser):
+    parser.add_argument("--solo-validacion", action="store_true",
+                        help="Corre solo la validacion movil y guarda experimentos/resultados_validacion.json; no toca la prueba 2018/2022/2026 ni el modelo de la app")
+
   def avisar(self, texto):
     self.stdout.write(texto)
     self.stdout.flush()
 
+  def imprimir_validacion(self, validacion_lineas_base, base):
+    """Tabla de la validacion movil (media de los pliegues) para la consola"""
+    self.avisar("Validacion movil (media de los pliegues):")
+    filas_validacion = {**{n: r["validacion"] for n, r in validacion_lineas_base.items()}, "lstm": base["validacion"]}
+    for nombre, v in filas_validacion.items():
+      fuente = base if nombre == "lstm" else validacion_lineas_base[nombre]
+      calibracion = fuente["pliegues"][PLIEGUES[-1]]["detalle_semilla_0"]["ece"]
+      self.avisar(f"  {nombre:<16} acierto {v['acierto_resultado']['media']:5.1f}%  log-loss {v['log_loss']['media']:.3f}  "
+                  f"Brier {v['brier']['media']:.3f}  RPS {v['rps']['media']:.3f}  ECE {calibracion:.3f}")
+
   def entrenar_varias(self, ds, k, con_rival, con_contexto, filas_tr, filas_va, filas_ev, epocas=None, extras=(), sec=None):
-    """Entrena una configuracion con cada semilla; devuelve (metricas por semilla, mejores epocas, predictores, secuencias)"""
+    """Entrena una configuracion con cada semilla; devuelve (metricas por semilla, mejores epocas, predictores, secuencias y detalle de la semilla 0)"""
     if sec is None:
       sec = construir_secuencias(ds, k=k, con_rival=con_rival, con_contexto=con_contexto, extras=extras)
-    corridas, epocas_mejores, predictores = [], [], []
+    corridas, epocas_mejores, predictores, detalle = [], [], [], None
     for semilla in SEMILLAS:
       inicio = time.time()
       validacion = filas_va if epocas is None else None
@@ -93,21 +115,23 @@ class Command(BaseCommand):
                                                     epocas=epocas or 80, extras=extras)
       if epocas is None:
         epocas_mejores.append(int(np.argmin(historia["val_loss"])) + 1)
-      resultado = evaluar(predictor, ds, sec, filas_ev)
+      resultado, por_partido = evaluar(predictor, ds, sec, filas_ev, por_partido=True)
       corridas.append(resultado)
       predictores.append(predictor)
+      if detalle is None:                       # la semilla 0 es la que se guarda y la que resume el pliegue
+        detalle = detalle_pliegue(resultado, por_partido)
       self.avisar(f"  k={k:<2} rival={con_rival!s:<5} contexto={con_contexto!s:<5} extras={','.join(extras) or '-':<26} semilla={semilla}: "
                   f"log-loss {resultado['log_loss']:.4f}, deviance {resultado['deviance']:.4f}, acierto {resultado['acierto_resultado']:.1f}% "
                   f"({time.time() - inicio:.0f}s)")
-    return corridas, epocas_mejores, predictores, sec
+    return corridas, epocas_mejores, predictores, sec, detalle
 
   def configuracion(self, ds, pliegues, k, con_rival, con_contexto, extras=()):
     """Una configuracion en todos los (pliegues); devuelve (resumen, predictores y secuencias del ultimo pliegue)"""
     sec = construir_secuencias(ds, k=k, con_rival=con_rival, con_contexto=con_contexto, extras=extras)
     por_pliegue, epocas = {}, []
     for agno, (tr, va) in pliegues.items():
-      corridas, mejores, predictores, _ = self.entrenar_varias(ds, k, con_rival, con_contexto, tr, va, va, extras=extras, sec=sec)
-      por_pliegue[agno] = resumen(corridas)
+      corridas, mejores, predictores, _, detalle = self.entrenar_varias(ds, k, con_rival, con_contexto, tr, va, va, extras=extras, sec=sec)
+      por_pliegue[agno] = {**resumen(corridas), "detalle_semilla_0": detalle}
       epocas += mejores
     return {"k": k, "con_rival": con_rival, "con_contexto": con_contexto, "extras": list(extras),
             "validacion": promedio_pliegues(por_pliegue), "pliegues": por_pliegue, "epocas": epocas}, predictores, sec
@@ -135,13 +159,26 @@ class Command(BaseCommand):
                 ", ".join(f"{a} ({tr.sum()} entrenamiento / {v.sum()} validacion)" for a, (tr, v) in pliegues.items()) +
                 f"; prueba {prueba.sum()} partidos de mundial")
 
-    # 0.4) lineas base y Elo puro en la validacion movil
-    validacion_lineas_base = {}
+    # 0.4) lineas base y Elo puro en la validacion movil (con intervalos y calibracion por pliegue)
+    validacion_lineas_base, referencia_pp, base_pp = {}, {}, {}
     for nombre, crear in (("medias", PredictorMedias.entrenar), ("mas_puntos", lambda _: PredictorMasPuntos()),
                           ("empate", lambda _: PredictorEmpate()), (REFERENCIA, PredictorElo.entrenar)):
-      por_pliegue = {a: resumen([evaluar(crear(ds[tr]), ds, None, v)]) for a, (tr, v) in pliegues.items()}
+      por_pliegue = {}
+      for a, (tr, v) in pliegues.items():
+        resultado, por_partido = evaluar(crear(ds[tr]), ds, None, v, por_partido=True)
+        por_pliegue[a] = {**resumen([resultado]), "detalle_semilla_0": detalle_pliegue(resultado, por_partido)}
+        base_pp.setdefault(nombre, {})[a] = por_partido
+        if nombre == REFERENCIA:
+          referencia_pp[a] = por_partido
       validacion_lineas_base[nombre] = {"validacion": promedio_pliegues(por_pliegue), "pliegues": por_pliegue}
       self.avisar(f"  {nombre:<11} validacion movil: log-loss {validacion_lineas_base[nombre]['validacion']['log_loss']['media']:.4f}")
+    # comparacion pareada de cada linea base contra el Elo en cada pliegue (la tabla de validacion tambien lleva p-valor)
+    for nombre, datos in validacion_lineas_base.items():
+      if nombre == REFERENCIA:
+        continue
+      for a in pliegues:
+        datos["pliegues"][a]["detalle_semilla_0"]["contra_elo"] = {
+          m: comparar(base_pp[nombre][a], referencia_pp[a], m) for m in ("log_loss", "rps")}
 
     # 0.0) largo de la secuencia
     self.avisar("Seleccion de K (con rival y contexto)")
@@ -190,6 +227,26 @@ class Command(BaseCommand):
     goles_va = ds.loc[va, ["goles_0", "goles_1"]].to_numpy()
     umbral_empate, curva = mejor_umbral(goles_va, [p.predecir(lote(ds, sec_base, va)) for p in predictores_base])
     self.avisar(f"Umbral de empate: {umbral_empate:.2f} (acierto en validacion {curva[0] * 100:.1f}% sin umbral -> {max(curva) * 100:.1f}%)")
+    # comparacion del LSTM elegido contra el Elo en el ultimo pliegue (es el que decide el umbral)
+    _, pp_lstm_va = evaluar(predictores_base[0], ds, sec_base, va, por_partido=True)
+    base["pliegues"][PLIEGUES[-1]]["detalle_semilla_0"]["contra_elo"] = {
+      m: comparar(pp_lstm_va, referencia_pp[PLIEGUES[-1]], m) for m in ("log_loss", "rps")}
+
+    if opciones.get("solo_validacion"):
+      VALIDACION.parent.mkdir(parents=True, exist_ok=True)
+      VALIDACION.write_text(json.dumps({
+        "fecha": date.today().isoformat(), "dataset": DATASET.name, "partidos": len(ds), "modo": "solo-validacion",
+        "particion": {"seleccion": f"origen movil: valida cada ciclo de {PLIEGUES} entrenando con los anteriores; criterio {CRITERIO}",
+                      "prueba": "no ejecutada (--solo-validacion)"},
+        "validacion_lineas_base": validacion_lineas_base,
+        "seleccion": seleccion,
+        "lstm": {"validacion": base["validacion"], "pliegues": base["pliegues"], "epocas": epocas_final,
+                 "umbral_empate": umbral_empate},
+        "umbral_empate": {"umbrales": [round(u, 2) for u in np.arange(0, 0.41, 0.01)], "acierto_validacion": curva},
+      }, indent=2, ensure_ascii=False), encoding="utf-8")
+      self.imprimir_validacion(validacion_lineas_base, base)
+      self.stdout.write(self.style.SUCCESS(f"Validacion -> {VALIDACION}; la prueba 2018/2022/2026 y el modelo de la app no se tocaron"))
+      return
 
     # 1-) prueba
     self.avisar("Prueba en los mundiales 2018 y 2022")
@@ -210,6 +267,10 @@ class Command(BaseCommand):
 
     # 2-) mundial 2026, entrenando con todo hasta 2022
     tr_2026, _, prueba_2026 = particion(ds, hasta=2022, prueba=[2026])
+    # Elo puro entrenado hasta 2022: queda como vara oficial reutilizable (A-04), no solo como fila de una tabla
+    carpeta_elo = settings.MODEL_PATH / "elo"
+    guardar_predictor(PredictorElo.entrenar(ds[tr_2026]), carpeta_elo, fecha=date.today().isoformat(), entrenado_hasta=2022)
+    self.avisar(f"Elo puro (vara oficial) -> {carpeta_elo}")
     resultados_2026 = {}
     if prueba_2026.any():
       self.avisar(f"Prueba en el mundial 2026 ({prueba_2026.sum()} partidos), entrenando hasta 2022")
@@ -235,18 +296,16 @@ class Command(BaseCommand):
       "particion": {"seleccion": f"origen movil: valida cada ciclo de {PLIEGUES} entrenando con los anteriores; criterio {CRITERIO}",
                     "prueba": "entrena ciclos <= 2014, prueba mundiales 2018 y 2022 (fase mundial)"},
       "validacion_lineas_base": validacion_lineas_base,
+      "validacion_lstm": {"validacion": base["validacion"], "pliegues": base["pliegues"], "epocas": epocas_final,
+                          "umbral_empate": umbral_empate},
       "seleccion": seleccion,
       "elegida": {"k": k, "con_rival": base["con_rival"], "con_contexto": base["con_contexto"], "extras": base["extras"],
                   "epocas": epocas_final, "umbral_empate": umbral_empate},
       "umbral_empate": {"umbrales": [round(u, 2) for u in np.arange(0, 0.41, 0.01)], "acierto_validacion": curva},
-      "prueba": prueba_resultados, "prueba_2026": resultados_2026, "modelo": carpeta.name,
+      "prueba": prueba_resultados, "prueba_2026": resultados_2026, "modelo": carpeta.name, "modelo_elo": "elo",
     }, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    self.avisar("Validacion movil (media de los pliegues):")
-    filas_validacion = {**{n: r["validacion"] for n, r in validacion_lineas_base.items()}, "lstm": base["validacion"]}
-    for nombre, v in filas_validacion.items():
-      self.avisar(f"  {nombre:<16} acierto {v['acierto_resultado']['media']:5.1f}%  log-loss {v['log_loss']['media']:.3f}  "
-                  f"Brier {v['brier']['media']:.3f}  RPS {v['rps']['media']:.3f}")
+    self.imprimir_validacion(validacion_lineas_base, base)
     for titulo, tabla in (("2018 y 2022", prueba_resultados), ("2026", resultados_2026)):
       self.avisar(f"Prueba {titulo} (intervalo del 95 %; contra el Elo puro: diferencia de log-loss, p de Diebold-Mariano, p de McNemar):")
       for nombre, r in tabla.items():

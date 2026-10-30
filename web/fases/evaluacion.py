@@ -21,6 +21,7 @@ Metricas de las probabilidades del resultado (local / empate / visitante), menor
   - rps: ranked probability score, como el Brier pero con las probabilidades acumuladas en el orden local < empate <
     visitante, asi dar empate cuando gana el local se castiga menos que dar visitante (entre 0 y 1)
   - calibracion: 10 tramos de probabilidad predicha (de los tres resultados juntos) con su media y la frecuencia real
+  - ece: expected calibration error, media ponderada por numero de casos de |probabilidad media - frecuencia real| en esos tramos (0 = perfectamente calibrado)
 
 Incertidumbre (con 128 o 104 partidos de prueba una diferencia chica puede ser suerte):
   - intervalos_bootstrap: intervalo del 95 % de cada metrica remuestreando partidos con reposicion
@@ -108,6 +109,41 @@ def probabilidades_deterministas(resultado, epsilon=EPSILON):
   return uno * (1 - epsilon) + epsilon / 3
 
 
+# RPS esperado de elegir cada accion (0 local, 1 empate, 2 visitante) cuando el resultado real es cada uno de los tres.
+# Se usa para la regla de decision de F.2: no siempre gana el argmax de probabilidad, porque el RPS castiga el orden.
+_RPS_ACCION = np.array([
+  [0.0, 0.5, 1.0],   # elegir local: 0 si gana local, 0,5 si empata, 1 si gana el visitante
+  [0.5, 0.0, 0.5],   # elegir empate
+  [1.0, 0.5, 0.0],   # elegir visitante
+])
+
+
+def decision_rps(probabilidades):
+  """
+  ¿QUE HACE?
+  Elige local / empate / visitante minimizando el RPS esperado con las probabilidades (n, 3) del predictor
+
+  ¿COMO LO HACE?
+  Para cada accion calcula el RPS esperado (matriz _RPS_ACCION por las probabilidades) y toma la accion de menor valor;
+  a diferencia del argmax, puede elegir empate cuando las probabilidades estan parejas, que es lo que el RPS premia
+
+  Returns:
+
+    - (n,) con 1 local / 0 empate / -1 visitante
+  """
+  probs = np.asarray(probabilidades, dtype=float)
+  probs = probs / probs.sum(axis=1, keepdims=True)
+  esperado = _RPS_ACCION @ probs.T                    # (3, n): accion x partido
+  accion = esperado.argmin(axis=0)
+  return np.where(accion == 0, 1, np.where(accion == 1, 0, -1))
+
+
+def decision_acierto(probabilidades):
+  """(n, 3) probabilidades -> (n,) resultado mas probable: 1 local / 0 empate / -1 visitante"""
+  accion = np.asarray(probabilidades, dtype=float).argmax(axis=1)
+  return np.where(accion == 0, 1, np.where(accion == 1, 0, -1))
+
+
 def metricas_probabilidad(real, probs, medias=True):
   """
   ¿QUE HACE?
@@ -150,6 +186,25 @@ def tabla_calibracion(real, probs, tramos=TRAMOS):
   return tabla
 
 
+def ece(real, probs, tramos=TRAMOS):
+  """
+  ¿QUE HACE?
+  Expected calibration error (ECE) de las probabilidades (probs) (n, 3) contra el resultado (real) (n,) con 1 / 0 / -1: la tabla de calibracion, pero resumida en un solo numero; 0 es calibracion perfecta y cuanto mas grande, peor
+
+  ¿COMO LO HACE?
+  Junta las 3 probabilidades de cada partido (igual que "tabla_calibracion"), y promedia |probabilidad media - frecuencia real| de cada tramo ponderando por cuantos casos tiene; los tramos vacios no cuentan
+
+  Returns:
+
+    - float entre 0 y 1
+  """
+  tabla = tabla_calibracion(real, probs, tramos)
+  total = sum(t["n"] for t in tabla)
+  if not total:
+    return 0.0
+  return sum(t["n"] * abs(t["probabilidad"] - t["frecuencia"]) for t in tabla if t["n"]) / total
+
+
 def metricas_por_partido(goles, lambdas, determinista=False, umbral_empate=0.0, probabilidades=None):
   """
   ¿QUE HACE?
@@ -183,11 +238,11 @@ def metricas(goles, lambdas, determinista=False, umbral_empate=0.0, probabilidad
 
   Returns:
 
-    - diccionario con partidos, mae_goles, acierto_resultado, marcador_exacto (en %), deviance, log_loss, brier, rps y calibracion
+    - diccionario con partidos, mae_goles, acierto_resultado, marcador_exacto (en %), deviance, log_loss, brier, rps, calibracion y ece
   """
   por_partido, real, probs = metricas_por_partido(goles, lambdas, determinista, umbral_empate, probabilidades)
   return {"partidos": int(len(real)), **{m: float(v.mean()) for m, v in por_partido.items()},
-          "calibracion": tabla_calibracion(real, probs)}
+          "calibracion": tabla_calibracion(real, probs), "ece": ece(real, probs)}
 
 
 def intervalos_bootstrap(por_partido, remuestreos=REMUESTREOS, nivel=0.95, semilla=0):

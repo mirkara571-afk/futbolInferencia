@@ -7,13 +7,44 @@ import pandas as pd
 from django.test import SimpleTestCase
 
 from .dataset import CATEGORIAS, CICLO_INTERNACIONALES, N_CONTEXTO, construir_dataset, construir_secuencias, mapa_paises
-from .modulo import ALL_METRICS, COLS_MODELO_POR_EQUIPO, METRICAS_ABSTRACTAS, historico_abstractas
-from .evaluacion import comparar, intervalos_bootstrap, metricas, metricas_por_partido, metricas_probabilidad, particion, probabilidades_deterministas, tabla_calibracion
+from .modulo import ALL_METRICS, BASE_METRICS, COLS_MODELO_POR_EQUIPO, METRICAS_ABSTRACTAS, OPTIONAL_METRICS, historico_abstractas
+from .ensamble import PredictorEnsamble
+from .evaluacion import comparar, decision_acierto, decision_rps, ece, intervalos_bootstrap, metricas, metricas_por_partido, metricas_probabilidad, particion, probabilidades_deterministas, tabla_calibracion
+from .modelos_arboles import PredictorLightGBMMulticlase, PredictorLightGBMPoisson, PredictorRandomForest
+from .modelos_estadisticos import PredictorDixonColes, PredictorOrdinal, PredictorPoissonGLM
 from .predictores import Lote, PredictorElo, PredictorEmpate, PredictorKeras, PredictorMasPuntos, PredictorMedias, cargar_predictor, guardar_predictor, lote_desde_entrada
 
 
 def partidos_df(filas):
   return pd.DataFrame(filas, columns=["home", "away", "score_0", "score_1", "agno"])
+
+
+def dataset_estadistico(n=120, semilla=0):
+  """Dataset sintetico con las columnas que usan los modelos de la Etapa B (sin tocar la base de datos)"""
+  rng = np.random.default_rng(semilla)
+  equipos = list(range(6))
+  filas = []
+  for _ in range(n):
+    home, away = rng.choice(equipos, 2, replace=False)
+    elo_0, elo_1 = 1500 + rng.normal(0, 120), 1500 + rng.normal(0, 120)
+    local_0 = int(rng.random() < 0.45)
+    local_1 = 0
+    fuerza = (elo_0 - elo_1) / 400 + 0.3 * local_0
+    goles_0 = int(rng.poisson(np.exp(0.2 + fuerza)))
+    goles_1 = int(rng.poisson(np.exp(0.2 - fuerza)))
+    filas.append({
+      "home": f"E{home}", "away": f"E{away}", "home_id": int(home), "away_id": int(away),
+      "agno": int(rng.choice([2002, 2006, 2010, 2014])), "categoria": rng.choice(["mundial", "eliminatoria_mundial"]),
+      "neutral": int(not local_0), "local_0": local_0, "local_1": local_1,
+      "elo_0": elo_0, "elo_1": elo_1, "fase_final": int(rng.random() < 0.2),
+      "rate_GF_0": rng.uniform(5, 20), "rate_GF_1": rng.uniform(5, 20),
+      "rate_GC_0": rng.uniform(5, 20), "rate_GC_1": rng.uniform(5, 20),
+      "gkps_0": rng.uniform(20, 80), "gkps_1": rng.uniform(20, 80),
+      "mos_0": rng.uniform(20, 80), "mos_1": rng.uniform(20, 80),
+      "mms_0": rng.uniform(20, 80), "mms_1": rng.uniform(20, 80),
+      "goles_0": goles_0, "goles_1": goles_1,
+    })
+  return pd.DataFrame(filas)
 
 
 PROXY_VACIO = pd.DataFrame(columns=["pais", "agno", *METRICAS_ABSTRACTAS])
@@ -163,6 +194,37 @@ class PredictoresTests(SimpleTestCase):
     self.assertEqual(PredictorMedias(1.5, 1.0).predecir(lote_desde_entrada(X)).shape, (2, 2))
 
 
+class ValorNeutroTests(SimpleTestCase):
+  """A-01: apagar una metrica no puede romper la prediccion; el hueco se rellena con la media del entrenamiento"""
+
+  def features(self):
+    return {m: pd.Series([1.0, 2.0]) for m in ALL_METRICS}
+
+  def test_todas_las_metricas_tienen_valor_neutro(self):
+    from .modulo import VALOR_NEUTRO
+    self.assertEqual(list(VALOR_NEUTRO), ALL_METRICS)
+    self.assertTrue(all(isinstance(VALOR_NEUTRO[m], float) for m in ALL_METRICS))
+
+  def test_validar_no_falla_con_metricas_apagadas(self):
+    from .modulo import validar_valores_neutros
+    # todas las base descartadas y todas las opcionales rechazadas: antes lanzaba ValueError por VALOR_NEUTRO=None
+    validar_valores_neutros(BASE_METRICS, [])
+
+  def test_neutralizar_solo_lo_apagado(self):
+    from .modulo import VALOR_NEUTRO, neutralizar
+    salida = neutralizar(self.features(), ["GF"], OPTIONAL_METRICS)
+    self.assertEqual(salida["GF"].tolist(), [VALOR_NEUTRO["GF"]] * 2)
+    self.assertEqual(salida["GC"].tolist(), [1.0, 2.0])          # no se toca
+    self.assertEqual(salida["PTS"].tolist(), [1.0, 2.0])
+
+  def test_neutralizar_opcionales_no_aceptadas(self):
+    from .modulo import VALOR_NEUTRO, neutralizar
+    salida = neutralizar(self.features(), [], ["gkps"])
+    self.assertEqual(salida["gkps"].tolist(), [1.0, 2.0])        # aceptada: se conserva
+    for m in ("mds", "mos", "mms", "rate_GC", "rate_GF"):
+      self.assertEqual(salida[m].tolist(), [VALOR_NEUTRO[m]] * 2)
+
+
 class CicloInternacionalesTests(SimpleTestCase):
 
   def test_ciclo_por_fechas(self):
@@ -238,6 +300,23 @@ class EvaluacionTests(SimpleTestCase):
     self.assertEqual((tabla[1]["n"], tabla[1]["frecuencia"]), (2, 0.0))
     self.assertIsNone(tabla[9]["probabilidad"])
 
+  def test_ece_a_mano(self):
+    # un partido que gana el local con (0,5 0,3 0,2): cada probabilidad cae en un tramo distinto y solo la primera paso
+    # ECE = (|0,5-1| + |0,3-0| + |0,2-0|) / 3 = 1/3
+    self.assertAlmostEqual(ece([1], [[0.5, 0.3, 0.2]]), 1 / 3)
+    # probabilidades perfectas (1 al resultado que paso): ECE = 0
+    self.assertAlmostEqual(ece([1, 0, -1], [[1, 0, 0], [0, 1, 0], [0, 0, 1]]), 0.0)
+    # y "metricas" lo incluye para que viaje en el JSON de evaluacion
+    self.assertIn("ece", metricas([[1, 0]], [[1.2, 0.8]]))
+
+  def test_decision_rps_puede_elegir_empate(self):
+    # 40 / 35 / 25: el argmax dice local, pero el RPS esperado prefiere empate porque castiga menos el orden
+    self.assertEqual(decision_acierto([[0.40, 0.35, 0.25]]).tolist(), [1])
+    self.assertEqual(decision_rps([[0.40, 0.35, 0.25]]).tolist(), [0])
+    # con un favorito claro, las dos reglas coinciden
+    self.assertEqual(decision_rps([[0.80, 0.15, 0.05]]).tolist(), [1])
+    self.assertEqual(decision_acierto([[0.80, 0.15, 0.05]]).tolist(), [1])
+
   def test_metricas_es_la_media_por_partido(self):
     goles, lambdas = [[2, 1], [0, 0], [1, 3]], [[1.5, 0.8], [1.0, 1.2], [0.9, 1.6]]
     r = metricas(goles, lambdas)
@@ -309,6 +388,108 @@ class PredictorEloTests(SimpleTestCase):
     lote = Lote(self.tabla(5, semilla=1))
     np.testing.assert_allclose(cargado.probabilidades(lote), p.probabilidades(lote))
     np.testing.assert_allclose(cargado.predecir(lote), p.predecir(lote))
+
+
+class ModelosEstadisticosTests(SimpleTestCase):
+  """Etapa B: contrato, formas, probabilidades y roundtrip de esquema de los tres modelos"""
+
+  def setUp(self):
+    self.ds = dataset_estadistico()
+
+  def test_poisson_glm_contrato(self):
+    p = PredictorPoissonGLM.entrenar(self.ds)
+    salida = p.predecir(Lote(self.ds))
+    self.assertEqual(salida.shape, (len(self.ds), 2))
+    self.assertTrue(np.isfinite(salida).all() and (salida > 0).all())
+    with tempfile.TemporaryDirectory() as carpeta:
+      guardar_predictor(p, carpeta)
+      cargado, esquema = cargar_predictor(carpeta)
+      self.assertEqual(esquema["backend"], "poisson_glm")
+      np.testing.assert_allclose(cargado.predecir(Lote(self.ds)), salida, rtol=1e-10)
+
+  def test_ordinal_probabilidades_y_roundtrip(self):
+    p = PredictorOrdinal.entrenar(self.ds)
+    probs = p.probabilidades(Lote(self.ds))
+    self.assertEqual(probs.shape, (len(self.ds), 3))
+    np.testing.assert_allclose(probs.sum(axis=1), 1, rtol=1e-10)
+    self.assertTrue((probs >= 0).all())
+    with tempfile.TemporaryDirectory() as carpeta:
+      guardar_predictor(p, carpeta)
+      cargado, _ = cargar_predictor(carpeta)
+      np.testing.assert_allclose(cargado.probabilidades(Lote(self.ds)), probs, rtol=1e-10)
+      np.testing.assert_allclose(cargado.predecir(Lote(self.ds)), p.predecir(Lote(self.ds)), rtol=1e-10)
+
+  def test_dixon_coles_probabilidades_y_roundtrip(self):
+    p = PredictorDixonColes.entrenar(self.ds, xi=0.1)
+    salida = p.predecir(Lote(self.ds))
+    probs = p.probabilidades(Lote(self.ds))
+    self.assertEqual(salida.shape, (len(self.ds), 2))
+    self.assertTrue(np.isfinite(salida).all() and (salida > 0).all())
+    np.testing.assert_allclose(probs.sum(axis=1), 1, rtol=1e-10)
+    with tempfile.TemporaryDirectory() as carpeta:
+      guardar_predictor(p, carpeta)
+      cargado, esquema = cargar_predictor(carpeta)
+      self.assertEqual(esquema["backend"], "dixon_coles")
+      np.testing.assert_allclose(cargado.probabilidades(Lote(self.ds)), probs, rtol=1e-10)
+      np.testing.assert_allclose(cargado.predecir(Lote(self.ds)), salida, rtol=1e-10)
+
+
+class ModelosArbolesTests(SimpleTestCase):
+  """Etapa C: contrato, formas, probabilidades y roundtrip de LightGBM y Random Forest"""
+
+  def setUp(self):
+    self.ds = dataset_estadistico()
+    self.lote = Lote(self.ds)
+
+  def test_lightgbm_poisson_contrato(self):
+    p = PredictorLightGBMPoisson.entrenar(self.ds, params={"n_estimators": 30})
+    salida = p.predecir(self.lote)
+    self.assertEqual(salida.shape, (len(self.ds), 2))
+    self.assertTrue(np.isfinite(salida).all() and (salida > 0).all())
+    with tempfile.TemporaryDirectory() as carpeta:
+      guardar_predictor(p, carpeta)
+      cargado, esquema = cargar_predictor(carpeta)
+      self.assertEqual(esquema["backend"], "lightgbm_poisson")
+      np.testing.assert_allclose(cargado.predecir(self.lote), salida, rtol=1e-6)
+
+  def test_lightgbm_multiclase_probabilidades(self):
+    p = PredictorLightGBMMulticlase.entrenar(self.ds, params={"n_estimators": 30})
+    probs = p.probabilidades(self.lote)
+    self.assertEqual(probs.shape, (len(self.ds), 3))
+    np.testing.assert_allclose(probs.sum(axis=1), 1, rtol=1e-10)
+    with tempfile.TemporaryDirectory() as carpeta:
+      guardar_predictor(p, carpeta)
+      cargado, _ = cargar_predictor(carpeta)
+      np.testing.assert_allclose(cargado.probabilidades(self.lote), probs, rtol=1e-6)
+
+  def test_random_forest_probabilidades(self):
+    p = PredictorRandomForest.entrenar(self.ds, params={"n_estimators": 30})
+    probs = p.probabilidades(self.lote)
+    self.assertEqual(probs.shape, (len(self.ds), 3))
+    np.testing.assert_allclose(probs.sum(axis=1), 1, rtol=1e-10)
+    with tempfile.TemporaryDirectory() as carpeta:
+      guardar_predictor(p, carpeta)
+      cargado, _ = cargar_predictor(carpeta)
+      np.testing.assert_allclose(cargado.probabilidades(self.lote), probs, rtol=1e-6)
+
+
+class EnsambleTests(SimpleTestCase):
+
+  def setUp(self):
+    self.ds = dataset_estadistico()
+    self.lote = Lote(self.ds)
+    self.base = [PredictorPoissonGLM.entrenar(self.ds), PredictorLightGBMPoisson.entrenar(self.ds, params={"n_estimators": 30})]
+
+  def test_probabilidades_y_roundtrip(self):
+    ensamble = PredictorEnsamble.entrenar(self.base, self.ds, np.ones(len(self.ds), dtype=bool))
+    probs = ensamble.probabilidades(self.lote)
+    self.assertEqual(probs.shape, (len(self.ds), 3))
+    np.testing.assert_allclose(probs.sum(axis=1), 1, rtol=1e-10)
+    with tempfile.TemporaryDirectory() as carpeta:
+      guardar_predictor(ensamble, carpeta)
+      cargado, esquema = cargar_predictor(carpeta)
+      self.assertEqual(esquema["backend"], "ensamble")
+      np.testing.assert_allclose(cargado.probabilidades(self.lote), probs, rtol=1e-6)
 
 
 class PredictorKerasTests(SimpleTestCase):
@@ -402,6 +583,18 @@ class ContextoTests(SimpleTestCase):
     self.assertEqual((antes_0[0], antes_1[0]), (1500, 1500))
     self.assertAlmostEqual(despues_0[0], 1500 + 20 * (1 - 1 / (1 + 10 ** (-100 / 400))))
     self.assertAlmostEqual(despues_0[0] + despues_1[0], 3000)
+
+  def test_elo_anterior_al_partido(self):
+    from .contexto import calcular_elo
+    # el Elo con el que se predice el 2do partido es el de despues del 1ro, nunca el de despues del 2do
+    antes_0, antes_1, despues_0, despues_1 = calcular_elo(self.internacionales([
+      ["2000-01-01", 2000, "A", "B", 1, 0, "amistoso", 0],
+      ["2000-02-01", 2000, "B", "A", 2, 2, "amistoso", 0],
+    ]))
+    self.assertEqual(antes_0[0], 1500)                       # el futuro no toca la primera fila
+    # A es visitante en el 2do partido: su Elo previo es el que tenia tras el 1ro; B es local y lo mismo
+    self.assertAlmostEqual(antes_1[1], despues_0[0])
+    self.assertAlmostEqual(antes_0[1], despues_1[0])
 
   def test_contexto_del_mundial(self):
     from .contexto import contexto_de_mundiales

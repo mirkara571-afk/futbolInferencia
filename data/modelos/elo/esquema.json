@@ -1,0 +1,30 @@
+{
+  "backend": "elo",
+  "coef": {
+    "corte_visitante": -0.8073027991326066,
+    "corte_empate": 0.43789551841605545,
+    "pendiente": 0.526311155717442,
+    "base": 0.2060563166027925,
+    "goles_pendiente": 0.19614522946962165
+  },
+  "metricas": [
+    "PTS",
+    "PJ",
+    "PG",
+    "PP",
+    "PE",
+    "GF",
+    "GC",
+    "D",
+    "gkps",
+    "mds",
+    "mos",
+    "mms",
+    "rate_GC",
+    "rate_GF"
+  ],
+  "version_metricas": 2,
+  "fecha": "2026-10-30",
+  "entrenado_hasta": 2022,
+  "partidos_entrenamiento": 8828
+}

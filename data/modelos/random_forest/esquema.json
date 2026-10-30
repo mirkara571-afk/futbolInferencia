@@ -1,0 +1,102 @@
+{
+  "backend": "random_forest",
+  "columnas": [
+    "elo_0",
+    "elo_1",
+    "elo_diff",
+    "local_0",
+    "local_1",
+    "neutral",
+    "fase_final",
+    "PTS_0",
+    "PTS_1",
+    "PJ_0",
+    "PJ_1",
+    "PG_0",
+    "PG_1",
+    "PP_0",
+    "PP_1",
+    "PE_0",
+    "PE_1",
+    "GF_0",
+    "GF_1",
+    "GC_0",
+    "GC_1",
+    "D_0",
+    "D_1",
+    "gkps_0",
+    "gkps_1",
+    "mds_0",
+    "mds_1",
+    "mos_0",
+    "mos_1",
+    "mms_0",
+    "mms_1",
+    "rate_GC_0",
+    "rate_GC_1",
+    "rate_GF_0",
+    "rate_GF_1",
+    "cat_mundial"
+  ],
+  "categorias": [
+    "mundial"
+  ],
+  "params": {
+    "n_estimators": 400,
+    "min_samples_leaf": 5,
+    "max_features": "sqrt",
+    "n_jobs": 1,
+    "random_state": 0,
+    "class_weight": "balanced_subsample"
+  },
+  "poisson": {
+    "backend": "poisson_glm",
+    "columnas": [
+      "const",
+      "elo_diff",
+      "es_local",
+      "neutral",
+      "rate_GF",
+      "rate_GC_rival",
+      "gkps",
+      "mos",
+      "fase_final",
+      "cat_mundial"
+    ],
+    "categorias": [
+      "mundial"
+    ],
+    "coef": {
+      "const": -0.08032586788533355,
+      "elo_diff": 0.1768587353847569,
+      "es_local": 0.4732764904112632,
+      "neutral": 0.31860342279505866,
+      "rate_GF": 0.05749387638627158,
+      "rate_GC_rival": 0.08993338924521083,
+      "gkps": -0.09102196691305608,
+      "mos": -0.25434021945328134,
+      "fase_final": 0.12201206710816248,
+      "cat_mundial": 0.05159218170916636
+    }
+  },
+  "metricas": [
+    "PTS",
+    "PJ",
+    "PG",
+    "PP",
+    "PE",
+    "GF",
+    "GC",
+    "D",
+    "gkps",
+    "mds",
+    "mos",
+    "mms",
+    "rate_GC",
+    "rate_GF"
+  ],
+  "version_metricas": 2,
+  "fecha": "2026-10-30",
+  "entrenado_hasta": 2022,
+  "partidos_entrenamiento": 8828
+}
