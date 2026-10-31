@@ -1,0 +1,14 @@
+.git
+.github
+.venv
+.spec-tmp
+agents
+notebooks
+experimentos
+docs
+*.pdf
+web/.env
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.ruff_cache

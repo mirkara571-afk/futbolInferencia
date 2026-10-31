@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: bd_mundial
+      POSTGRES_USER: mundial
+      POSTGRES_PASSWORD: mundial
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mundial -d bd_mundial"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-change-me}
+      DEBUG: "False"
+      ALLOWED_HOSTS: "*"
+      DB_NAME: bd_mundial
+      DB_USER: mundial
+      DB_PASSWORD: mundial
+      DB_HOST: db
+      DB_PORT: "5432"
+      MODEL_DIR: lstm-2026-10-25
+      WHITENOISE: "True"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

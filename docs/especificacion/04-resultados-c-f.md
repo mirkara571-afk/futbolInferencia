@@ -142,9 +142,9 @@ Para cada acción (local, empate, visitante) se calcula el RPS esperado con las 
 | E · Datos nuevos | 10 % | 90 % |
 | F · Ensamble y elección | 100 % | 0 % |
 | G · 5 campeones | 0 % | 100 % |
-| H · Producto | 0 % | 100 % |
+| H · Producto | 30 % | 70 % |
 
-**A–H: ~52 % hecho, ~48 % pendiente.** Por esfuerzo, lo que queda está sobre todo en H (API, Docker/demo, UI, CI), G (Montecarlo) y E.1/E.2 (datos reales); D.4/D.5 es opcional.
+**A–H: ~56 % hecho, ~44 % pendiente.** Por esfuerzo, lo que queda está sobre todo en H (UI, demo, portafolio), G (Montecarlo) y E.1/E.2 (datos reales); D.4/D.5 es opcional.
 
 ### Fases de la guía v1
 
