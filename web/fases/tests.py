@@ -65,6 +65,42 @@ def dataset_jerarquico(semilla=0):
   return pd.DataFrame(filas)
 
 
+def dataset_jerarquico_temporal(semilla=0, agnos=(2002, 2006, 2010, 2014), n_partidos_por_ciclo=30, deriva=0.0):
+  """Dataset sintetico temporal para JH-02: 4 equipos presentes en todos los ciclos, con una fuerza base por equipo que
+  se mueve como random walk si deriva > 0 (si es 0, la fuerza es constante y el ruido viene solo de los goles)"""
+  rng = np.random.default_rng(semilla)
+  equipos = list(range(4))
+  fuerza = {e: float(rng.normal(0, 0.4)) for e in equipos}
+  filas = []
+  for agno in agnos:
+    for e in equipos:
+      fuerza[e] = fuerza[e] + float(rng.normal(0, deriva))
+    for _ in range(n_partidos_por_ciclo):
+      home, away = rng.choice(equipos, 2, replace=False)
+      lambda_home = float(np.exp(fuerza[home] - fuerza[away]))
+      lambda_away = float(np.exp(fuerza[away] - fuerza[home]))
+      filas.append({"home_id": int(home), "away_id": int(away), "agno": int(agno), "local_0": 0, "local_1": 0,
+                    "goles_0": int(rng.poisson(lambda_home)), "goles_1": int(rng.poisson(lambda_away))})
+  return pd.DataFrame(filas)
+
+
+def dataset_jerarquico_suavizado(semilla=0):
+  """Equipo 0 con fuerza constante alta y pocos partidos por ciclo (media cruda ruidosa), para el test de suavizado"""
+  rng = np.random.default_rng(semilla)
+  equipos = [0, 1, 2]
+  fuerza = {0: 0.8, 1: -0.4, 2: -0.4}
+  agnos = [2002, 2006, 2010, 2014, 2018]
+  filas = []
+  for agno in agnos:
+    for _ in range(12):
+      home, away = rng.choice(equipos, 2, replace=False)
+      lambda_home = float(np.exp(fuerza[home] - fuerza[away]))
+      lambda_away = float(np.exp(fuerza[away] - fuerza[home]))
+      filas.append({"home_id": int(home), "away_id": int(away), "agno": int(agno), "local_0": 0, "local_1": 0,
+                    "goles_0": int(rng.poisson(lambda_home)), "goles_1": int(rng.poisson(lambda_away))})
+  return pd.DataFrame(filas)
+
+
 def dataset_xg(n_mundial=24, semilla=0):
   """Dataset sintetico con xG real en los mundiales de 2018 y 2022 y filas sin xG (eliminatorias 2017/2021)"""
   rng = np.random.default_rng(semilla)
@@ -556,6 +592,78 @@ class ModelosJerarquicosTests(SimpleTestCase):
       f_menos = _neg_log_posterior(menos, home, away, y_0, y_1, local_0, local_1, 1.0, 1.0)[0]
       numerico[i] = (f_mas - f_menos) / (2 * eps)
     np.testing.assert_allclose(grad, numerico, rtol=1e-4, atol=1e-4)
+
+
+class ModelosJerarquicosTemporalesTests(SimpleTestCase):
+  """JH-02: estados por (seleccion, ciclo) con random walk, no-fuga temporal, equivalencia estatica y suavizado"""
+
+  def test_contrato_temporal(self):
+    ds = dataset_jerarquico_temporal()
+    p = PredictorJerarquico.entrenar(ds)
+    salida = p.predecir(Lote(ds))
+    self.assertEqual(salida.shape, (len(ds), 2))
+    self.assertTrue(np.isfinite(salida).all())
+    self.assertTrue((salida >= 0).all())
+
+  def test_roundtrip_temporal(self):
+    ds = dataset_jerarquico_temporal(semilla=4)
+    p = PredictorJerarquico.entrenar(ds)
+    lote = Lote(ds)
+    salida = p.predecir(lote)
+    reconstruido = PredictorJerarquico.desde_esquema(p.a_esquema(), None)
+    np.testing.assert_allclose(reconstruido.predecir(lote), salida, rtol=1e-6, atol=1e-6)
+
+  def test_no_fuga_temporal(self):
+    ds = dataset_jerarquico_temporal(semilla=1)
+    p = PredictorJerarquico.entrenar(ds[ds["agno"] <= 2010].reset_index(drop=True))
+    esquema = p.a_esquema()
+    fila_2014 = ds[ds["agno"] == 2014].iloc[0]
+    home_id, away_id = int(fila_2014["home_id"]), int(fila_2014["away_id"])
+    # el esquema no guarda ningun par posterior a 2010
+    for equipo, v in esquema["estados"].items():
+      self.assertTrue(all(c <= 2010 for c in v["ciclos"]), f"el equipo {equipo} guardo un ciclo posterior a 2010")
+    # cada equipo aparece en los tres ciclos de entrenamiento, nunca en 2014
+    self.assertEqual(set(esquema["estados"][str(home_id)]["ciclos"]), {2002, 2006, 2010})
+    # extrapolacion sin deriva: predecir en 2014 usa el ultimo estado <= 2010, nunca un estado de 2014
+    self.assertEqual(p._estado_equipo(home_id, 2014, "alpha"), p._estado_equipo(home_id, 2010, "alpha"))
+    self.assertEqual(p._estado_equipo(away_id, 2014, "delta"), p._estado_equipo(away_id, 2010, "delta"))
+    salida = p.predecir(Lote(pd.DataFrame([fila_2014])))
+    self.assertEqual(salida.shape, (1, 2))
+    self.assertTrue(np.isfinite(salida).all())
+
+  def test_predecir_sin_agno_usa_estado_final(self):
+    # el Lote de runtime no trae "agno": predecir debe usar el ultimo estado por equipo, no el prior 0
+    ds = dataset_jerarquico_temporal(semilla=3)
+    p = PredictorJerarquico.entrenar(ds)
+    tabla = ds.drop(columns=["agno"]).reset_index(drop=True)
+    salida = p.predecir(Lote(tabla))
+    # dos partidos con distinto local deben dar lambdas distintas (no todas iguales al prior)
+    locales = tabla["home_id"].astype(int).to_numpy()
+    i, j = int(np.flatnonzero(locales != locales[0])[0]), 0
+    self.assertNotAlmostEqual(float(salida[i, 0]), float(salida[j, 0]), places=6)
+
+  def test_equivalencia_estatica(self):
+    ds = dataset_jerarquico_temporal(semilla=2)
+    p = PredictorJerarquico.entrenar(ds, sigma_rw=1e-4)
+    for equipo, v in p.estados.items():
+      self.assertLess(float(np.max(np.abs(np.diff(v["alpha"])))), 1e-2)
+      self.assertLess(float(np.max(np.abs(np.diff(v["delta"])))), 1e-2)
+
+  def test_suavizado_temporal(self):
+    ds = dataset_jerarquico_suavizado()
+    p = PredictorJerarquico.entrenar(ds, sigma_rw=0.5)
+    dif_estados = np.diff(np.asarray(p.estados[0]["alpha"]))
+    medias_crudas = []
+    for agno in sorted(ds["agno"].unique()):
+      mascara = ds["agno"] == agno
+      como_home = mascara & (ds["home_id"] == 0)
+      como_away = mascara & (ds["away_id"] == 0)
+      goles = np.concatenate([ds.loc[como_home, "goles_0"].to_numpy(dtype=float),
+                              ds.loc[como_away, "goles_1"].to_numpy(dtype=float)])
+      medias_crudas.append(np.log(max(goles.mean(), 1e-3)))
+    dif_crudas = np.diff(np.asarray(medias_crudas))
+    # el random walk suaviza: en escala log la variacion de los estados entre ciclos es menor que la de las medias crudas
+    self.assertLess(np.var(dif_estados), np.var(dif_crudas))
 
 
 class ModelosArbolesTests(SimpleTestCase):
