@@ -292,6 +292,7 @@ El núcleo (GLM y LightGBM Poisson) recibe las features existentes de `_matriz_g
 
 #### JH-03 · Verosimilitud xG (log-Normal) con omisión
 - **Objetivo:** incorporar `log xg ~ Normal(log λ + η, σ_xg)` sólo donde `xG_disponible=1`.
+- **Nota de soporte (cerrada):** el log-normal exige `xg > 0`; los xG iguales a 0 o negativos se omiten (sin soporte).
 - **Archivos:** `web/fases/modelos_jerarquicos.py`, `web/fases/tests.py`.
 - **Pasos:** (1) término xG en la log-verosimilitud condicionado a `xG_disponible`; (2) parámetros `η`, `σ_xg`; (3) entrenar leyendo `partidos_features_xg.csv`; (4) test: en pliegues sin xG (2006/2010/2014) el resultado **coincide** con JH-02 (el término se omite); `predecir` no lee `xg_*`.
 - **Aceptación:** el término xG no cambia el entrenamiento cuando `xG_disponible=0`; `predecir` no usa el xG del objetivo; roundtrip.

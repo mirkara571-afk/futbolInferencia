@@ -101,6 +101,29 @@ def dataset_jerarquico_suavizado(semilla=0):
   return pd.DataFrame(filas)
 
 
+def dataset_jerarquico_xg(semilla=0, agnos=(2002, 2006, 2010, 2014, 2018, 2022), n_partidos_por_ciclo=20):
+  """Dataset sintetico JH-03: goles en todos los ciclos y xG real (log-normal alrededor de la misma media latente) solo
+  en los mundiales de 2018 y 2022; el resto lleva xG_disponible=0 y xg_* NaN"""
+  rng = np.random.default_rng(semilla)
+  equipos = list(range(4))
+  fuerza = {e: float(rng.normal(0, 0.4)) for e in equipos}
+  filas = []
+  for agno in agnos:
+    con_xg = agno in (2018, 2022)
+    for _ in range(n_partidos_por_ciclo):
+      home, away = rng.choice(equipos, 2, replace=False)
+      lambda_home = float(np.exp(fuerza[home] - fuerza[away]))
+      lambda_away = float(np.exp(fuerza[away] - fuerza[home]))
+      fila = {"home_id": int(home), "away_id": int(away), "agno": int(agno), "local_0": 0, "local_1": 0,
+              "goles_0": int(rng.poisson(lambda_home)), "goles_1": int(rng.poisson(lambda_away)),
+              "xG_disponible": int(con_xg), "xg_0": np.nan, "xg_1": np.nan}
+      if con_xg:
+        fila["xg_0"] = float(lambda_home * np.exp(rng.normal(0, 0.35)))
+        fila["xg_1"] = float(lambda_away * np.exp(rng.normal(0, 0.35)))
+      filas.append(fila)
+  return pd.DataFrame(filas)
+
+
 def dataset_xg(n_mundial=24, semilla=0):
   """Dataset sintetico con xG real en los mundiales de 2018 y 2022 y filas sin xG (eliminatorias 2017/2021)"""
   rng = np.random.default_rng(semilla)
@@ -664,6 +687,128 @@ class ModelosJerarquicosTemporalesTests(SimpleTestCase):
     dif_crudas = np.diff(np.asarray(medias_crudas))
     # el random walk suaviza: en escala log la variacion de los estados entre ciclos es menor que la de las medias crudas
     self.assertLess(np.var(dif_estados), np.var(dif_crudas))
+
+
+class ModelosJerarquicosXgTests(SimpleTestCase):
+  """JH-03: verosimilitud xG (log-normal) con omision, predecir sin leer xg_* y gradiente analitico"""
+
+  def _indices_temporales(self, ds):
+    home_id = ds["home_id"].astype(int).to_numpy()
+    away_id = ds["away_id"].astype(int).to_numpy()
+    agno = ds["agno"].astype(int).to_numpy()
+    pares = sorted(set(zip(home_id.tolist(), agno.tolist())) | set(zip(away_id.tolist(), agno.tolist())))
+    indice_par = {par: i for i, par in enumerate(pares)}
+    P = len(pares)
+    equipos = sorted(set(home_id.tolist()) | set(away_id.tolist()))
+    n = len(ds)
+    ia_home = np.array([indice_par[(int(home_id[k]), int(agno[k]))] for k in range(n)], dtype=int)
+    ia_away = np.array([indice_par[(int(away_id[k]), int(agno[k]))] for k in range(n)], dtype=int)
+    ciclos = {}
+    for par, i in indice_par.items():
+      ciclos.setdefault(par[0], []).append((par[1], i))
+    primeros = []
+    rw_previos = []
+    rw_siguientes = []
+    for equipo in equipos:
+      items = sorted(ciclos[equipo])
+      primeros.append(items[0][1])
+      for (_, i_antes), (_, i_despues) in zip(items, items[1:]):
+        rw_previos.append(i_antes)
+        rw_siguientes.append(i_despues)
+    return (ia_home, ia_away, ia_home.copy(), ia_away.copy(),
+            np.array(primeros, dtype=int), np.array(rw_previos, dtype=int), np.array(rw_siguientes, dtype=int), P)
+
+  def _xg(self, ds):
+    disp = ds["xG_disponible"].to_numpy(dtype=float)
+    xg_0 = np.where(disp == 1.0, ds["xg_0"].to_numpy(dtype=float), np.nan)
+    xg_1 = np.where(disp == 1.0, ds["xg_1"].to_numpy(dtype=float), np.nan)
+    return xg_0, xg_1
+
+  def test_omision_xg_identica_a_jh02(self):
+    ds = dataset_jerarquico_temporal(semilla=5)
+    p_sin = PredictorJerarquico.entrenar(ds)
+    ds_con = ds.copy()
+    ds_con["xg_0"] = np.nan
+    ds_con["xg_1"] = np.nan
+    ds_con["xG_disponible"] = 0
+    p_con = PredictorJerarquico.entrenar(ds_con)
+    lote = Lote(ds)
+    np.testing.assert_allclose(p_con.predecir(lote), p_sin.predecir(lote), rtol=1e-6, atol=1e-6)
+    self.assertAlmostEqual(p_con.beta0, p_sin.beta0, places=6)
+    self.assertAlmostEqual(p_con.gamma, p_sin.gamma, places=6)
+    for e in p_sin.estados:
+      np.testing.assert_allclose(p_con.estados[e]["alpha"], p_sin.estados[e]["alpha"], rtol=1e-6, atol=1e-6)
+      np.testing.assert_allclose(p_con.estados[e]["delta"], p_sin.estados[e]["delta"], rtol=1e-6, atol=1e-6)
+
+  def test_predecir_no_lee_xg(self):
+    ds = dataset_jerarquico_xg(semilla=3)
+    p = PredictorJerarquico.entrenar(ds)
+    salida = p.predecir(Lote(ds))
+    alterado = ds.copy()
+    alterado["xg_0"] = 1000.0
+    alterado["xg_1"] = 1000.0
+    np.testing.assert_allclose(p.predecir(Lote(alterado)), salida, rtol=0, atol=0)
+
+  def test_xg_cero_se_omite(self):
+    # un xG de 0 (o negativo) no tiene soporte log-normal: debe omitirse, no producir log(0)=-inf
+    ds = dataset_jerarquico_xg(semilla=8)
+    ds.loc[ds.index[0], "xg_0"] = 0.0
+    ds.loc[ds.index[0], "xG_disponible"] = 1
+    p = PredictorJerarquico.entrenar(ds)
+    self.assertTrue(p.convergencia["ok"], p.convergencia)
+    self.assertTrue(np.isfinite(p.beta0) and np.isfinite(p.eta) and np.isfinite(p.sigma_xg))
+    self.assertTrue(np.any(np.abs(p.alpha) > 1e-6))
+
+  def test_roundtrip_temporal_xg(self):
+    ds = dataset_jerarquico_xg(semilla=4)
+    p = PredictorJerarquico.entrenar(ds)
+    lote = Lote(ds)
+    salida = p.predecir(lote)
+    esquema = p.a_esquema()
+    self.assertIn("eta", esquema)
+    self.assertIn("sigma_xg", esquema)
+    self.assertIn("usar_xg", esquema)
+    self.assertTrue(esquema["usar_xg"])
+    reconstruido = PredictorJerarquico.desde_esquema(esquema, None)
+    np.testing.assert_allclose(reconstruido.predecir(lote), salida, rtol=1e-6, atol=1e-6)
+    self.assertAlmostEqual(reconstruido.eta, p.eta, places=10)
+    self.assertAlmostEqual(reconstruido.sigma_xg, p.sigma_xg, places=10)
+
+  def test_gradiente_xg(self):
+    from .modelos_jerarquicos import _neg_log_posterior_temporal
+    ds = dataset_jerarquico_xg(semilla=7, n_partidos_por_ciclo=6)
+    ia_home, ia_away, id_home, id_away, primeros, rw_previos, rw_siguientes, P = self._indices_temporales(ds)
+    y_0 = ds["goles_0"].to_numpy(dtype=float)
+    y_1 = ds["goles_1"].to_numpy(dtype=float)
+    local_0 = ds["local_0"].to_numpy(dtype=float)
+    local_1 = ds["local_1"].to_numpy(dtype=float)
+    xg_0, xg_1 = self._xg(ds)
+    theta = np.random.default_rng(1).normal(0, 0.3, 4 + 2 * P)
+    args = (ia_home, ia_away, id_home, id_away, y_0, y_1, local_0, local_1, 1.0, 1.0, 0.5,
+            primeros, rw_previos, rw_siguientes, xg_0, xg_1)
+    valor, grad = _neg_log_posterior_temporal(theta, *args)
+    valor_sin, _ = _neg_log_posterior_temporal(theta, ia_home, ia_away, id_home, id_away, y_0, y_1, local_0, local_1,
+                                               1.0, 1.0, 0.5, primeros, rw_previos, rw_siguientes, None, None)
+    # el termino xG aporta: el valor de la objetivo con xG difiere del valor sin xG
+    self.assertNotAlmostEqual(valor, valor_sin, places=6)
+    numerico = np.zeros_like(theta)
+    eps = 1e-5
+    for i in range(len(theta)):
+      mas, menos = theta.copy(), theta.copy()
+      mas[i] += eps
+      menos[i] -= eps
+      f_mas = _neg_log_posterior_temporal(mas, *args)[0]
+      f_menos = _neg_log_posterior_temporal(menos, *args)[0]
+      numerico[i] = (f_mas - f_menos) / (2 * eps)
+    np.testing.assert_allclose(grad, numerico, rtol=1e-4, atol=1e-4)
+
+  def test_contrato_xg(self):
+    ds = dataset_jerarquico_xg(semilla=2)
+    p = PredictorJerarquico.entrenar(ds)
+    salida = p.predecir(Lote(ds))
+    self.assertEqual(salida.shape, (len(ds), 2))
+    self.assertTrue(np.isfinite(salida).all())
+    self.assertTrue((salida >= 0).all())
 
 
 class ModelosArbolesTests(SimpleTestCase):
