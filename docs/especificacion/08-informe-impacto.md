@@ -33,7 +33,9 @@ Se ejecutó el plan de calidad predictiva priorizando el **futuro (2030+)**, con
 | sin `rate_GF/rate_GC` | **+0,0049** | **+0,0077** |
 | sin contexto (Elo/local/neutral/fase) | **+0,1847** | **+0,1440** |
 
-**Conclusión:** `gkps` y `mos` no aportan en estos modelos (candidatas a retirar). `rate_GF/rate_GC_rival` y el contexto (sobre todo Elo) sí aportan. `mds`/`mms` no están en GLM/LightGBM, solo en el LSTM; su ablation se pospone (ver §5).
+**Conclusión:** `gkps` y `mos` no aportan en estos modelos (candidatas a retirar). `rate_GF/rate_GC_rival` y el contexto (sobre todo Elo) sí aportan. `mds`/`mms` no están en GLM/LightGBM, solo en el LSTM.
+
+**LSTM (pliegue 2014, semilla 0):** neutralizar `mds`/`mms` da log-loss 0,8627 vs 0,8634 del baseline (Δ −0,0007; acierto 61,2 % vs 61,6 %). Tampoco aportan en el LSTM, coherente con `gkps`/`mos`.
 
 ### 2.3 Backtest xG A/B/C (diagnóstico, n=64 por ciclo)
 
@@ -106,7 +108,7 @@ Se ejecutó el plan de calidad predictiva priorizando el **futuro (2030+)**, con
 
 1. **E.1 real**: ejecutar `python etl\busca_metricas.py --todos` fuera de DSH y reconstruir el proxy (`--verificar` `pk_real/sot_real`).
 2. **E.3 parcial**: ranking FIFA (1992+), valor de plantilla, lesiones (según licencia).
-3. **Ablation `mds/mms` en LSTM** (segundo paso): pospuesta — `mds`/`mms` solo existen en el LSTM (que ya no es el mejor modelo) y derivan de `SOT` imputado, consistente con que `gkps`/`mos` no aporten en GLM/LightGBM. Se puede hacer neutralizando esas columnas en un pliegue, pero su valor marginal es bajo.
+3. **Ablation `mds/mms` en LSTM**: **hecha** (pliegue 2014, semilla 0): neutralizar `mds/mms` no empeora (Δ −0,0007), así que son candidatas a retirar junto con `gkps/mos`.
 4. **Decisión de features**: retirar `gkps`/`mos` del modelo por defecto (el ablation lo respalda); mantener `rate_GF/rate_GC` y contexto.
 5. **Datos modernos antes que más modelos**: si se consiguen más torneos con xG (Euro 2020/24, Copa 2024, AFCON 2023 de StatsBomb), re-evaluar el jerárquico+xG y el backtest B/C.
 6. **G/H.2/H.4/H.7** siguen pendientes como trabajo de producto, no de predicción.

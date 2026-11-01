@@ -1,0 +1,11 @@
+{
+  "fecha": "2026-11-01",
+  "modelo": "lstm",
+  "config": {"k": 1, "con_rival": false, "con_contexto": true, "extras": ["elo", "continental"], "semilla": 0, "epocas": 80},
+  "pliegue": 2014,
+  "neutralizadas": ["mds", "mms"],
+  "baseline": {"log_loss": 0.8634, "acierto_resultado": 61.6, "ece": 0.0215},
+  "sin_mds_mms": {"log_loss": 0.8627, "acierto_resultado": 61.2, "ece": 0.0219},
+  "delta_log_loss": -0.0007,
+  "conclusion": "Neutralizar mds/mms no empeora (mejora marginalmente); son candidatas a retirar junto con gkps/mos."
+}
