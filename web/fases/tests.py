@@ -14,6 +14,8 @@ from .evaluacion import comparar, decision_acierto, decision_rps, ece, intervalo
 from .modelos_arboles import PredictorLightGBMMulticlase, PredictorLightGBMPoisson, PredictorRandomForest
 from .modelos_estadisticos import PredictorDixonColes, PredictorOrdinal, PredictorPoissonGLM
 from .predictores import Lote, PredictorElo, PredictorEmpate, PredictorKeras, PredictorMasPuntos, PredictorMedias, cargar_predictor, guardar_predictor, lote_desde_entrada
+from .xg_rolling import construir_rolling
+from .imputador_xg import ImputadorXG
 
 
 def partidos_df(filas):
@@ -45,6 +47,37 @@ def dataset_estadistico(n=120, semilla=0):
       "mms_0": rng.uniform(20, 80), "mms_1": rng.uniform(20, 80),
       "goles_0": goles_0, "goles_1": goles_1,
     })
+  return pd.DataFrame(filas)
+
+
+def dataset_xg(n_mundial=24, semilla=0):
+  """Dataset sintetico con xG real en los mundiales de 2018 y 2022 y filas sin xG (eliminatorias 2017/2021)"""
+  rng = np.random.default_rng(semilla)
+  filas = []
+  for agno, disp in ((2017, 0), (2018, 1), (2021, 0), (2022, 1)):
+    for orden in range(n_mundial):
+      home = int(rng.integers(0, 6))
+      away = int(rng.integers(0, 6))
+      while away == home:
+        away = int(rng.integers(0, 6))
+      elo_0 = 1500 + rng.normal(0, 120)
+      elo_1 = 1500 + rng.normal(0, 120)
+      local_0 = int(rng.random() < 0.45)
+      fila = {
+        "home_id": home, "away_id": away, "agno": agno, "orden": orden,
+        "categoria": "mundial" if disp else "eliminatoria_mundial",
+        "neutral": int(not local_0), "local_0": local_0, "local_1": 0,
+        "elo_0": elo_0, "elo_1": elo_1, "fase_final": int(rng.random() < 0.2),
+        "rate_GF_0": rng.uniform(5, 20), "rate_GF_1": rng.uniform(5, 20),
+        "rate_GC_0": rng.uniform(5, 20), "rate_GC_1": rng.uniform(5, 20),
+        "gkps_0": rng.uniform(20, 80), "gkps_1": rng.uniform(20, 80),
+        "mos_0": rng.uniform(20, 80), "mos_1": rng.uniform(20, 80),
+        "xG_disponible": disp, "xg_0": np.nan, "xg_1": np.nan,
+      }
+      if disp:
+        fila["xg_0"] = float(rng.gamma(1.4, 1.0))
+        fila["xg_1"] = float(rng.gamma(1.2, 1.0))
+      filas.append(fila)
   return pd.DataFrame(filas)
 
 
@@ -706,3 +739,88 @@ class APITests(SimpleTestCase):
     respuesta = self.client.get("/api/schema/")
     self.assertEqual(respuesta.status_code, 200)
     self.assertIn(b"openapi", respuesta.content.lower())
+
+
+class XgRollingTests(SimpleTestCase):
+  """XG-01: features rolling de xG sin fuga, ventana y relleno de missing"""
+
+  def partidos_a_b(self, n=6, agno=2018):
+    return pd.DataFrame([
+      {"home_id": 0, "away_id": 1, "agno": agno, "orden": o, "xG_disponible": 1,
+       "xg_0": float(o + 1), "xg_1": float(o + 1) / 2.0}
+      for o in range(n)
+    ])
+
+  def test_rolling_no_fuga(self):
+    # alterar el xG del propio partido no cambia sus features, solo las de los partidos posteriores
+    ds = self.partidos_a_b()
+    original = construir_rolling(ds)
+    ds.loc[3, ["xg_0", "xg_1"]] = [100.0, 100.0]
+    alterado = construir_rolling(ds)
+    columnas = [f"{prefijo}_{lado}" for lado in (0, 1)
+                for prefijo in ("xg_roll_for", "xg_roll_against", "xg_roll_n", "xg_roll_has")]
+    for c in columnas:
+      self.assertEqual(original.loc[3, c], alterado.loc[3, c], f"el partido 3 filtro su propio xG en {c}")
+    self.assertNotEqual(original.loc[4, "xg_roll_for_0"], alterado.loc[4, "xg_roll_for_0"])
+
+  def test_primer_partido_sin_historia(self):
+    ds = self.partidos_a_b()
+    salida = construir_rolling(ds)
+    self.assertEqual(salida.loc[0, "xg_roll_n_0"], 0)
+    self.assertEqual(salida.loc[0, "xg_roll_has_0"], 0)
+    self.assertEqual(salida.loc[0, "xg_roll_for_0"], 0.0)
+    self.assertEqual(salida.loc[0, "xg_roll_against_0"], 0.0)
+
+  def test_ventana_3_usa_exactamente_tres_previos(self):
+    salida = construir_rolling(self.partidos_a_b(n=6), ventana=3)
+    # en el partido orden 5 A tiene 5 previos; ventana 3 toma los ultimos 3 (anotado 3,4,5; recibido 1.5,2.0,2.5)
+    self.assertEqual(salida.loc[5, "xg_roll_n_0"], 3)
+    self.assertAlmostEqual(salida.loc[5, "xg_roll_for_0"], 4.0)
+    self.assertAlmostEqual(salida.loc[5, "xg_roll_against_0"], 2.0)
+
+  def test_relleno_con_media_global(self):
+    salida = construir_rolling(self.partidos_a_b(n=1), media_global=1.5)
+    self.assertEqual(salida.loc[0, "xg_roll_for_0"], 1.5)
+    self.assertEqual(salida.loc[0, "xg_roll_against_0"], 1.5)
+    self.assertEqual(salida.loc[0, "xg_roll_n_0"], 0)
+    self.assertEqual(salida.loc[0, "xg_roll_has_0"], 0)
+
+
+class ImputadorXgTests(SimpleTestCase):
+  """XG-02: imputador Ridge sobre log1p(xg), sin fuga temporal y reproducible"""
+
+  def setUp(self):
+    self.ds = dataset_xg()
+
+  def test_no_fuga_temporal_y_conserva_real(self):
+    # calibrar solo en <=2018 no puede consultar las filas de 2022
+    imp = ImputadorXG.entrenar(self.ds[self.ds["agno"] <= 2018])
+    self.assertEqual(float(imp.agnos_entrenamiento_.max()), 2018.0)
+    self.assertTrue(np.all(imp.agnos_entrenamiento_ <= 2018))
+    n_2018 = (self.ds["agno"] == 2018).sum()
+    self.assertEqual(len(imp.y_entrenamiento_), 2 * n_2018)
+    salida = imp.predecir(self.ds)
+    self.assertEqual(list(salida.columns), ["xg_imputado_0", "xg_imputado_1"])
+    # el xG real se conserva donde existe (2018 y 2022)
+    reales = self.ds["xG_disponible"] == 1
+    np.testing.assert_allclose(salida.loc[reales, "xg_imputado_0"].to_numpy(),
+                               self.ds.loc[reales, "xg_0"].to_numpy(dtype=float))
+    np.testing.assert_allclose(salida.loc[reales, "xg_imputado_1"].to_numpy(),
+                               self.ds.loc[reales, "xg_1"].to_numpy(dtype=float))
+    # donde no hay real la salida es finita y no negativa
+    np.testing.assert_array_less(-1e-9, salida.loc[~reales, "xg_imputado_0"].to_numpy())
+    np.testing.assert_array_less(-1e-9, salida.loc[~reales, "xg_imputado_1"].to_numpy())
+
+  def test_reproducible(self):
+    a = ImputadorXG.entrenar(self.ds, semilla=0)
+    b = ImputadorXG.entrenar(self.ds, semilla=0)
+    self.assertEqual(a.alpha_, b.alpha_)
+    np.testing.assert_allclose(a.predecir(self.ds).to_numpy(), b.predecir(self.ds).to_numpy())
+
+  def test_metricas_imputacion(self):
+    imp = ImputadorXG.entrenar(self.ds, semilla=0)
+    metricas = imp.metricas_imputacion()
+    self.assertEqual(metricas["metodo"], "temporal_2018_a_2022")
+    for clave in ("mae_log1p", "rmse_log1p", "r2_log1p", "mae_original", "rmse_original", "r2_original"):
+      self.assertIn(clave, metricas)
+      self.assertTrue(np.isfinite(metricas[clave]))
