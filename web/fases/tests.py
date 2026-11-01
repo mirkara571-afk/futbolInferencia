@@ -824,3 +824,67 @@ class ImputadorXgTests(SimpleTestCase):
     for clave in ("mae_log1p", "rmse_log1p", "r2_log1p", "mae_original", "rmse_original", "r2_original"):
       self.assertIn(clave, metricas)
       self.assertTrue(np.isfinite(metricas[clave]))
+
+
+class EvaluarXgBacktestTests(SimpleTestCase):
+  """XG-03: particion compartida A/B/C/O, features de cada brazo y serializacion del JSON"""
+
+  def ds_fase(self, n_mundial=8, semilla=0):
+    """dataset_xg con columna fase y goles, para ejercitar la particion y el nucleo del comando"""
+    ds = dataset_xg(n_mundial=n_mundial, semilla=semilla).copy()
+    ds["fase"] = np.where(ds["categoria"] == "mundial", "mundial", "eliminatoria")
+    rng = np.random.default_rng(semilla + 1)
+    ds["goles_0"] = rng.poisson(1.4, len(ds))
+    ds["goles_1"] = rng.poisson(1.2, len(ds))
+    return ds
+
+  def test_particion_mismas_filas_2018_para_abcd(self):
+    from .management.commands.evaluar_xg_backtest import BRAZOS, datos_brazo, media_global_xg, particion_interna
+    ds = self.ds_fase()
+    tr, pr = particion_interna(ds)
+    self.assertEqual((tr.sum(), pr.sum()), (8, 8))
+    identidad_tr = ds.loc[tr, ["home_id", "away_id", "agno", "orden"]].reset_index(drop=True)
+    media = media_global_xg(ds[tr])
+    for brazo in BRAZOS:
+      ds_tr, ds_pr = datos_brazo(ds, tr, pr, brazo, media)
+      self.assertEqual(len(ds_tr), tr.sum())
+      self.assertEqual(len(ds_pr), pr.sum())
+      pd.testing.assert_frame_equal(ds_tr[["home_id", "away_id", "agno", "orden"]].reset_index(drop=True), identidad_tr)
+
+  def test_oraculo_incluye_xg_y_A_no(self):
+    from .management.commands.evaluar_xg_backtest import BRAZOS, construir_nucleo, particion_interna
+    ds = self.ds_fase()
+    tr, _ = particion_interna(ds)
+    ds_tr = ds[tr].reset_index(drop=True)
+    columnas_a = construir_nucleo(ds_tr, BRAZOS["A"])[0].columns
+    columnas_o = construir_nucleo(ds_tr, BRAZOS["O"])[0].columns
+    self.assertIn("xg_0", columnas_o)
+    self.assertIn("xg_1", columnas_o)
+    self.assertNotIn("xg_0", columnas_a)
+    self.assertNotIn("xg_1", columnas_a)
+
+  def test_B_incluye_8_columnas_rolling_y_A_no(self):
+    from .management.commands.evaluar_xg_backtest import (BRAZOS, COLS_ROLLING, construir_nucleo, datos_brazo,
+                                                         media_global_xg, particion_interna)
+    ds = self.ds_fase()
+    tr, pr = particion_interna(ds)
+    media = media_global_xg(ds[tr])
+    ds_tr_b, _ = datos_brazo(ds, tr, pr, "B", media)
+    ds_tr_a = ds[tr].reset_index(drop=True)
+    columnas_b = construir_nucleo(ds_tr_b, BRAZOS["B"])[0].columns
+    columnas_a = construir_nucleo(ds_tr_a, BRAZOS["A"])[0].columns
+    rolling = [f"{c}_{lado}" for c in COLS_ROLLING for lado in (0, 1)]
+    self.assertEqual(len(rolling), 8)
+    for c in rolling:
+      self.assertIn(c, columnas_b)
+      self.assertNotIn(c, columnas_a)
+
+  def test_serializacion_json(self):
+    from .management.commands.evaluar_xg_backtest import estructura_json
+    estructura = estructura_json("2026-11-01", {"glm": {"A": {"log_loss": 1.0, "p_vs_A": None},
+                                                        "O": {"log_loss": 1.1, "no_desplegable": True, "p_vs_A": {"log_loss": {"p_dm": 0.5}}}}})
+    vuelta = json.loads(json.dumps(estructura))
+    self.assertTrue(vuelta["oraculo_no_desplegable"])
+    for campo in ("fecha", "dataset", "particion", "familias", "brazos"):
+      self.assertIn(campo, vuelta)
+    self.assertTrue(vuelta["brazos"]["glm"]["O"]["no_desplegable"])
