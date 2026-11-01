@@ -28,7 +28,27 @@ xG solo existe de forma homogénea en **2018 y 2022**. Son **128 partidos** y **
 - El xG **del partido** no se puede usar para predecir ese mismo partido (fuga). Sirve como **observación de calidad** a posteriori, no como input pre-partido.
 - El camino correcto no es imputar xG de 1930 ni usarlo como columna más en el GLM: es un **modelo jerárquico** que trate el xG como una medición de la fuerza latente.
 
-## 3. Cómo se usará
+## 3. Dataset moderno (hecho)
+
+`etl/unir_statsbomb.py` une StatsBomb a `partidos_features.csv` y escribe `data/datasets/partidos_features_xg.csv`:
+
+- 9.833 filas (misma base), 63 columnas;
+- `xg_0/xg_1`, `tiros_0/1`, `sot_0/1` y `xG_disponible`;
+- xG unido en **64/64 partidos de 2018** y **64/64 de 2022** (solo fase mundial); el resto queda `xG_disponible=0`.
+
+## 3.1 Diagnóstico: ¿el xG predice mejor?
+
+Usar el xG del partido como `λ` (oráculo, no desplegable) en los 128 partidos de 2018+2022:
+
+| Modelo | Log-loss | RPS | Acierto |
+|---|---:|---:|---:|
+| xG como λ | 1,0636 | 0,2142 | 52,3 % |
+| Elo puro | 1,0201 | 0,2170 | 51,6 % |
+| Poisson GLM | 1,0117 | 0,2147 | 53,1 % |
+
+**Conclusión honesta:** el xG **solo** (como goles esperados) es **peor** que el Elo y el GLM para predecir el resultado. El xG captura calidad de ocasiones, pero no fuerza relativa ni empates. Su valor debe venir como **medición auxiliar en un modelo jerárquico**, no como `λ` directa. Además, con solo 128 partidos modernos, cualquier modelo que entrene con xG tiene muy poca muestra.
+
+## 4. Cómo se usará
 
 1. **Traducir nombres** de StatsBomb (inglés) a la BD (español) con `data/partidos/nombres_en_es.csv` + excepciones (`IR Iran`→Irán, `Korea Republic`→Corea del Sur, etc.).
 2. **Unir** a `partidos_features.csv` por `(agno, home, away, marcador)`.
@@ -44,9 +64,9 @@ xG solo existe de forma homogénea en **2018 y 2022**. Son **128 partidos** y **
 
 StatsBomb Open Data es gratuito para investigación **no comercial**. Antes de usarlo en un producto comercial hay que revisar la licencia y, si no aplica, optar por un proveedor con licencia (Opta, Stats Perform, Sportmonks, API-Football).
 
-## 5. Pendiente
+## 6. Pendiente
 
-- Traducción + unión de nombres (script).
-- Dataset moderno con `xg_0/xg_1` y `xG_disponible`.
-- Backtest A/B/C.
+- ~~Traducción + unión de nombres~~ (hecho con `nombres_en_es.csv`).
+- ~~Dataset moderno con `xg_0/xg_1` y `xG_disponible`~~ (hecho: `partidos_features_xg.csv`).
+- Backtest A/B/C (diagnóstico del imputador).
 - Prototipo jerárquico (partial pooling + random walk) con `statsmodels`/PyMC.
