@@ -277,6 +277,7 @@ El núcleo (GLM y LightGBM Poisson) recibe las features existentes de `_matriz_g
 
 #### JH-01 · `PredictorJerarquico` estático (partial pooling, sólo goles)
 - **Objetivo:** versión más simple que demuestre *partial pooling*: `α_i`, `δ_i` por selección (sin tiempo), goles ~ Poisson, priors Gaussianas, MAP con `scipy`.
+- **Nota de signo (cerrada):** la implementación usa `λ = exp(β0 + α_atacante + δ_defensor + γ·local)`, con `δ` positivo = concede más goles (debilidad). Es equivalente al `-δ` del §4.1 bajo priors simétricos; `δ_plan = -δ_impl`.
 - **Archivos:** `web/fases/modelos_jerarquicos.py` (nuevo), `web/fases/predictores.py` (registrar vía `PREDICTORES`), `web/fases/tests.py`.
 - **Pasos:** (1) clase `PredictorJerarquico` con `nombre="jerarquico"`, `entrenar` (L-BFGS-B sobre `α,δ,β0,γ` + priors), `predecir` (estados por `home_id/away_id`), `a_esquema`/`desde_esquema`; (2) registrar; (3) tests de contrato (roundtrip, `(n,2)`) y test de *shrinkage* (equipo con 1 partido ⇒ `α` cercano a 0; equipo con muchos ⇒ más extremo).
 - **Aceptación:** `cargar_predictor` reconstruye; `evaluar` finito en validación; test de shrinkage verde; sin dependencias nuevas.

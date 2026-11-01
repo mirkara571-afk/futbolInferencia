@@ -13,6 +13,7 @@ from .ensamble import PredictorEnsamble
 from .evaluacion import comparar, decision_acierto, decision_rps, ece, intervalos_bootstrap, metricas, metricas_por_partido, metricas_probabilidad, particion, probabilidades_deterministas, tabla_calibracion
 from .modelos_arboles import PredictorLightGBMMulticlase, PredictorLightGBMPoisson, PredictorRandomForest
 from .modelos_estadisticos import PredictorDixonColes, PredictorOrdinal, PredictorPoissonGLM
+from .modelos_jerarquicos import PredictorJerarquico
 from .predictores import Lote, PredictorElo, PredictorEmpate, PredictorKeras, PredictorMasPuntos, PredictorMedias, cargar_predictor, guardar_predictor, lote_desde_entrada
 from .xg_rolling import construir_rolling
 from .imputador_xg import ImputadorXG
@@ -47,6 +48,20 @@ def dataset_estadistico(n=120, semilla=0):
       "mms_0": rng.uniform(20, 80), "mms_1": rng.uniform(20, 80),
       "goles_0": goles_0, "goles_1": goles_1,
     })
+  return pd.DataFrame(filas)
+
+
+def dataset_jerarquico(semilla=0):
+  """Dataset sintetico para el modelo jerarquico: 6 equipos base con 60 partidos y un equipo (99) con 1 partido extremo"""
+  rng = np.random.default_rng(semilla)
+  base = list(range(6))
+  filas = []
+  for _ in range(60):
+    home, away = rng.choice(base, 2, replace=False)
+    filas.append({"home_id": int(home), "away_id": int(away), "local_0": 0, "local_1": 0,
+                  "goles_0": int(rng.poisson(1.2)), "goles_1": int(rng.poisson(1.1))})
+  # el equipo 99 juega un solo partido y marca 6 goles: senal extrema con historia minima
+  filas.append({"home_id": 99, "away_id": 0, "local_0": 0, "local_1": 0, "goles_0": 6, "goles_1": 0})
   return pd.DataFrame(filas)
 
 
@@ -466,6 +481,81 @@ class ModelosEstadisticosTests(SimpleTestCase):
       self.assertEqual(esquema["backend"], "dixon_coles")
       np.testing.assert_allclose(cargado.probabilidades(Lote(self.ds)), probs, rtol=1e-10)
       np.testing.assert_allclose(cargado.predecir(Lote(self.ds)), salida, rtol=1e-10)
+
+
+class ModelosJerarquicosTests(SimpleTestCase):
+  """JH-01: contrato, shrinkage, roundtrip y reconocimiento del backend jerarquico"""
+
+  def test_contrato(self):
+    ds = dataset_estadistico()
+    p = PredictorJerarquico.entrenar(ds)
+    salida = p.predecir(Lote(ds))
+    self.assertEqual(salida.shape, (len(ds), 2))
+    self.assertTrue(np.isfinite(salida).all())
+    self.assertTrue((salida >= 0).all())
+
+  def test_shrinkage(self):
+    ds = dataset_jerarquico()
+    cerrado = PredictorJerarquico.entrenar(ds, sigma_attack=0.2, sigma_defense=0.2)
+    abierto = PredictorJerarquico.entrenar(ds, sigma_attack=5.0, sigma_defense=5.0)
+    a_cerrado = cerrado.alpha[cerrado.indice[99]]
+    a_abierto = abierto.alpha[abierto.indice[99]]
+    self.assertTrue(np.isfinite(a_cerrado))
+    self.assertTrue(np.isfinite(a_abierto))
+    # con el prior fuerte (sigma chico) el equipo de un partido se encoge mas hacia 0 que con el prior laxo
+    self.assertLess(abs(a_cerrado), abs(a_abierto))
+
+  def test_roundtrip(self):
+    ds = dataset_estadistico()
+    p = PredictorJerarquico.entrenar(ds)
+    lote = Lote(ds)
+    salida = p.predecir(lote)
+    reconstruido = PredictorJerarquico.desde_esquema(p.a_esquema(), None)
+    np.testing.assert_allclose(reconstruido.predecir(lote), salida, rtol=1e-6, atol=1e-6)
+
+  def test_equipo_desconocido(self):
+    p = PredictorJerarquico.entrenar(dataset_estadistico())
+    tabla = pd.DataFrame({"home_id": [9998, 9999], "away_id": [9999, 9998], "local_0": [0, 1], "local_1": [0, 0]})
+    salida = p.predecir(Lote(tabla))
+    self.assertTrue(np.isfinite(salida).all())
+    # ambos desconocidos: alpha=delta=0, lambda = exp(beta0 + gamma * local)
+    np.testing.assert_allclose(salida[:, 0], np.exp(p.beta0 + p.gamma * np.array([0.0, 1.0])), rtol=1e-6)
+    np.testing.assert_allclose(salida[:, 1], np.exp(p.beta0), rtol=1e-6)
+
+  def test_cargar_predictor_jerarquico(self):
+    ds = dataset_estadistico()
+    p = PredictorJerarquico.entrenar(ds)
+    lote = Lote(ds)
+    salida = p.predecir(lote)
+    with tempfile.TemporaryDirectory() as carpeta:
+      guardar_predictor(p, carpeta)
+      cargado, esquema = cargar_predictor(carpeta)
+      self.assertEqual(esquema["backend"], "jerarquico")
+      np.testing.assert_allclose(cargado.predecir(lote), salida, rtol=1e-6, atol=1e-6)
+
+  def test_gradiente_analitico(self):
+    from .modelos_jerarquicos import _neg_log_posterior
+    ds = dataset_estadistico(n=40, semilla=1)
+    equipos = sorted(set(ds["home_id"]) | set(ds["away_id"]))
+    indice = {e: i for i, e in enumerate(equipos)}
+    home = ds["home_id"].map(indice).to_numpy(dtype=int)
+    away = ds["away_id"].map(indice).to_numpy(dtype=int)
+    y_0 = ds["goles_0"].to_numpy(dtype=float)
+    y_1 = ds["goles_1"].to_numpy(dtype=float)
+    local_0 = ds["local_0"].to_numpy(dtype=float)
+    local_1 = ds["local_1"].to_numpy(dtype=float)
+    theta = np.random.default_rng(0).normal(0, 0.3, 2 + 2 * len(equipos))
+    _, grad = _neg_log_posterior(theta, home, away, y_0, y_1, local_0, local_1, 1.0, 1.0)
+    numerico = np.zeros_like(theta)
+    eps = 1e-5
+    for i in range(len(theta)):
+      mas, menos = theta.copy(), theta.copy()
+      mas[i] += eps
+      menos[i] -= eps
+      f_mas = _neg_log_posterior(mas, home, away, y_0, y_1, local_0, local_1, 1.0, 1.0)[0]
+      f_menos = _neg_log_posterior(menos, home, away, y_0, y_1, local_0, local_1, 1.0, 1.0)[0]
+      numerico[i] = (f_mas - f_menos) / (2 * eps)
+    np.testing.assert_allclose(grad, numerico, rtol=1e-4, atol=1e-4)
 
 
 class ModelosArbolesTests(SimpleTestCase):
