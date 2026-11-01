@@ -1231,3 +1231,43 @@ class EvaluarXgBacktestTests(SimpleTestCase):
     for campo in ("fecha", "dataset", "particion", "familias", "brazos"):
       self.assertIn(campo, vuelta)
     self.assertTrue(vuelta["brazos"]["glm"]["O"]["no_desplegable"])
+
+
+class EvaluarJerarquicoTests(SimpleTestCase):
+  """JH-04: particiones del comando (validacion movil + split diagnostico) y serializacion del JSON (sin evaluar)"""
+
+  def ds_particiones(self):
+    """Dataset sintetico con solo agno y fase: las columnas que lee particiones_jerarquico"""
+    filas = []
+    for agno in (2002, 2006, 2010, 2014, 2018, 2022):
+      for i in range(6):
+        filas.append({"agno": agno, "fase": "mundial" if i % 2 == 0 else "eliminatoria"})
+    return pd.DataFrame(filas)
+
+  def test_particiones_pliegues_y_split(self):
+    from .management.commands.evaluar_jerarquico import particiones_jerarquico
+    ds = self.ds_particiones()
+    partes = particiones_jerarquico(ds)
+    self.assertEqual(set(partes["pliegues"]), {2006, 2010, 2014})
+    esperado_tr = {2006: 6, 2010: 12, 2014: 18}
+    for agno, (tr, va) in partes["pliegues"].items():
+      self.assertEqual(int(tr.sum()), esperado_tr[agno])
+      self.assertEqual(int(va.sum()), 6)
+      self.assertTrue((ds.loc[tr, "agno"] <= agno - 4).all())
+      self.assertTrue((ds.loc[va, "agno"] == agno).all())
+    tr, pr = partes["split_diagnostico"]
+    self.assertEqual(int(tr.sum()), 30)
+    self.assertEqual(int(pr.sum()), 3)
+    self.assertTrue((ds.loc[tr, "agno"] <= 2018).all())
+    self.assertTrue((ds.loc[pr, "agno"] == 2022).all())
+    self.assertTrue((ds.loc[pr, "fase"] == "mundial").all())
+
+  def test_serializacion_json(self):
+    from .management.commands.evaluar_jerarquico import detalle_split_diagnostico, estructura_json
+    split = detalle_split_diagnostico({"jerarquico": {"log_loss": 1.0}}, {}, 30, 3)
+    estructura = estructura_json("2026-11-01", {}, {"jerarquico": {"log_loss": 1.0}}, split)
+    vuelta = json.loads(json.dumps(estructura))
+    for campo in ("fecha", "pliegues", "validacion_movil_media", "split_diagnostico", "nota"):
+      self.assertIn(campo, vuelta)
+    self.assertTrue(vuelta["split_diagnostico"]["diagnostico"])
+    self.assertEqual(vuelta["split_diagnostico"]["n_prueba"], 3)

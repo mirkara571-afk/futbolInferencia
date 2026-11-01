@@ -1,6 +1,6 @@
 # Registro de miradas al examen (hold-out)
 
-**Proyecto:** futbolInferencia · **Etapa:** A (vara de medición) · **Última actualización:** 2026-10-29
+**Proyecto:** futbolInferencia · **Etapa:** A (vara de medición) · **Última actualización:** 2026-11-01
 
 ## Para qué sirve
 
@@ -25,6 +25,7 @@ La guía v2 pide que 2018+2022 y 2026 se miren **una sola vez** al final (Etapa 
 | 2026-10-30 | **Mirada confirmatoria de F.3**: ensamble Elo+GLM+LightGBM y bases | 2018+2022: ensamble 1,0073 vs Elo 1,0201 de log-loss; 2026: ensamble 0,8581 vs Elo 0,8541. Diferencias no significativas (`p_dm` 0,391 y 0,754) | `experimentos/resultados_finales.json` | **Única mirada de F.3; no se reoptimizó con ella** |
 | 2026-11-01 | **Diagnóstico xG**: xG del partido usado como λ sobre 2018+2022 (128 partidos) | xG-as-λ 1,0636 vs Elo 1,0201 vs GLM 1,0117 de log-loss; el xG solo no supera al Elo/GLM | `docs/especificacion/06-xg-moderno.md` | Diagnóstico E.2; no se usó para decidir |
 | 2026-11-01 | **Backtest A/B/C de xG** sobre 2018 (entrenar) → 2022 (prueba), n=64 | LightGBM log-loss: A 1,0380, B(rolling real) 1,0085, C(imputado) 1,0319, O(oráculo) 1,0183; GLM C 1,0936. Sin diferencias significativas en log-loss (p_dm > 0,28); excepción nominal GLM O/RPS (oráculo no desplegable, no sobrevive a corrección múltiple). B-C LightGBM: 1,0085 vs 1,0319 (p_dm 0,457) | `experimentos/resultados_xg_backtest.json` | Diagnóstico del imputador; **no** se usa para promover |
+| 2026-11-01 | **Validación móvil del jerárquico + split diagnóstico ≤2018→2022** (JH-04) | Validación móvil 2006/2010/2014 (sin xG): jerárquico 0,8526 vs Elo 0,8409 vs GLM 0,8366 de log-loss (no bate a Elo/GLM; en 2010 pierde con p_dm 0,010). Split 2022: jerárquico 1,0277 y jerárquico+xG 1,0220 vs Elo 1,0417 / GLM 1,0524; el xG mejora apenas sobre el jerárquico sin xG (p_dm 0,79) y nada es significativo | `experimentos/resultados_jerarquico.json` | Diagnóstico JH-04; el split usa 2022 como mirada extraordinaria, **no** se usa para promover |
 
 > **2026-10-30:** se lanzó un `evaluar_modelos` completo y se detuvo **antes** de llegar a la prueba al comprobar que iba a mirar el hold-out; no se usó ningún resultado de test de esa corrida. La corrida válida de ese día es `--solo-validacion`.
 
