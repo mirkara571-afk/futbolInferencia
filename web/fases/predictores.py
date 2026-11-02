@@ -405,8 +405,10 @@ def cargar_predictor(carpeta):
     from .ensamble import PredictorEnsamble
     from .modelos_arboles import PREDICTORES as _PREDICTORES_ARBOLES
     from .modelos_estadisticos import PREDICTORES as _PREDICTORES_ESTADISTICOS
+    from .modelos_jerarquicos import PREDICTORES as _PREDICTORES_JERARQUICOS
     REGISTRO.update(_PREDICTORES_ESTADISTICOS)
     REGISTRO.update(_PREDICTORES_ARBOLES)
+    REGISTRO.update(_PREDICTORES_JERARQUICOS)
     REGISTRO[PredictorEnsamble.nombre] = PredictorEnsamble.desde_esquema
   if esquema.get("backend") not in REGISTRO:
     raise ValueError(f"Backend desconocido {esquema.get('backend')!r}; registrados: {sorted(REGISTRO)}")
