@@ -17,6 +17,7 @@ from .modelos_jerarquicos import PredictorJerarquico
 from .predictores import Lote, PredictorElo, PredictorEmpate, PredictorKeras, PredictorMasPuntos, PredictorMedias, cargar_predictor, guardar_predictor, lote_desde_entrada
 from .xg_rolling import construir_rolling
 from .imputador_xg import ImputadorXG
+from .montecarlo import simular_grupo, simular_knockout
 
 
 def partidos_df(filas):
@@ -1056,7 +1057,9 @@ class APITests(SimpleTestCase):
                                  data=json.dumps({"recepcion": ["2018", "Fase de Grupos", ["A", 0, "B", 0, 0]]}),
                                  content_type="application/json")
     self.assertEqual(respuesta.status_code, 200)
-    self.assertEqual(respuesta.json()["partidos"], [{"home": "A", "score": "1:0", "away": "B"}])
+    partido = respuesta.json()["partidos"][0]
+    self.assertEqual((partido["home"], partido["score"], partido["away"]), ("A", "1:0", "B"))
+    self.assertIsNone(partido["probs"])
 
   @override_settings(ALLOWED_HOSTS=["testserver"])
   @patch("fases.views.predecir_recepcion")
@@ -1072,16 +1075,118 @@ class APITests(SimpleTestCase):
     self.assertEqual(json.loads(respuesta.json()["partidos"])[0]["score"], "1:0")
 
   @override_settings(ALLOWED_HOSTS=["testserver"])
-  def test_probabilidades_pendiente_devuelve_501(self):
-    respuesta = self.client.post("/api/probabilidades/", data=json.dumps({"recepcion": ["2018", "Fase de Grupos"]}),
+  @patch("fases.api.views.probabilidades_campeon")
+  def test_probabilidades_pasa_reglamento(self, mc):
+    mc.return_value = {"year": 1986, "simulaciones": 5000, "campeones": []}
+    reglamento = {"llave": ["1A-2B"], "cruces": {}}
+    respuesta = self.client.post("/api/probabilidades/",
+                                 data=json.dumps({"recepcion": ["1986", "Fase de Grupos"], "reglamento": reglamento}),
                                  content_type="application/json")
-    self.assertEqual(respuesta.status_code, 501)
+    self.assertEqual(respuesta.status_code, 200)
+    self.assertEqual(mc.call_args.kwargs["reglamento"], reglamento)
+
+  @override_settings(ALLOWED_HOSTS=["testserver"])
+  @patch("fases.api.views.probabilidades_campeon", side_effect=ValueError("formato no soportado"))
+  def test_probabilidades_propaga_error(self, mc):
+    respuesta = self.client.post("/api/probabilidades/",
+                                 data=json.dumps({"recepcion": ["1934", "Fase de Grupos"]}),
+                                 content_type="application/json")
+    self.assertEqual(respuesta.status_code, 400)
+
+  @override_settings(ALLOWED_HOSTS=["testserver"])
+  @patch("fases.api.views.probabilidades_campeon")
+  def test_probabilidades_devuelve_cuadro(self, mc):
+    mc.return_value = {"year": 2022, "simulaciones": 5000,
+                       "campeones": [{"pais": "Argentina", "campeon": 0.30, "final": 0.10, "semifinal": 0.05}]}
+    respuesta = self.client.post("/api/probabilidades/", data=json.dumps({"recepcion": ["2022", "Fase de Grupos"]}),
+                                 content_type="application/json")
+    self.assertEqual(respuesta.status_code, 200)
+    self.assertEqual(respuesta.json()["campeones"][0]["pais"], "Argentina")
 
   @override_settings(ALLOWED_HOSTS=["testserver"])
   def test_schema_openapi(self):
     respuesta = self.client.get("/api/schema/")
     self.assertEqual(respuesta.status_code, 200)
     self.assertIn(b"openapi", respuesta.content.lower())
+
+
+class MontecarloTests(SimpleTestCase):
+  """G: motor Montecarlo (numpy puro), sin tocar la base de datos"""
+
+  def favorito(self, n=4):
+    """lambdas con el equipo 0 mucho mas fuerte: anota ~5 y recibe ~0.1"""
+    lambdas = np.full((n, n, 2), 1.0)
+    for j in range(1, n):
+      lambdas[0, j] = [5.0, 0.1]
+      lambdas[j, 0] = [0.1, 5.0]
+    return lambdas
+
+  def test_favorito_gana_la_llave_y_cuentas_suman(self):
+    lambdas = self.favorito()
+    rng = np.random.default_rng(0)
+    campeones = {}
+    for _ in range(2000):
+      campeon, finalista, semifinalistas = simular_knockout(rng, lambdas, [0, 1, 2, 3])
+      campeones[campeon] = campeones.get(campeon, 0) + 1
+      self.assertEqual(len(set(semifinalistas)), 4)
+      self.assertIn(finalista, semifinalistas)
+    self.assertEqual(sum(campeones.values()), 2000)      # las cuentas suman el total
+    self.assertGreater(campeones.get(0, 0), 0.9 * 2000)  # el favorito claro sale primero
+
+  def test_grupo_ordena_al_favorito_primero(self):
+    lambdas = self.favorito()
+    rng = np.random.default_rng(0)
+    partidos = [(0, 1), (2, 3), (0, 2), (1, 3), (0, 3), (1, 2)]
+    df = simular_grupo(rng, lambdas, partidos)
+    self.assertEqual(df.iloc[0]["pais"], 0)
+    self.assertEqual(list(df.columns), ["pais", "Pts", "DG", "GF"])
+
+  def test_orden_cuartos_8_usa_grupos_numerados(self):
+    from .montecarlo import _orden_cuartos_8
+    tablas = {"Grupo " + g: [{"pais": i * 4 + k, "Pts": 0, "DG": 0, "GF": 0} for k in range(4)]
+              for i, g in enumerate("1234")}
+    orden = _orden_cuartos_8(tablas)
+    self.assertEqual(len(orden), 8)
+    self.assertEqual(len(set(orden)), 8)
+
+  def test_orden_llave_terceros_1986(self):
+    from .modulo import ReglamentoTerceros
+    from .montecarlo import _orden_llave_terceros
+    tablas = {"Grupo " + g: [{"pais": gi * 4 + k, "Pts": 20 - k, "DG": 0, "GF": 0} for k in range(4)]
+              for gi, g in enumerate("ABCDEF")}
+    orden = _orden_llave_terceros(tablas, ReglamentoTerceros.oficial(1986))
+    self.assertEqual(len(orden), 16)
+    self.assertEqual(len(set(orden)), 16)
+
+
+class CalibracionYTunerTests(SimpleTestCase):
+  """D.1/D.2/D.5: calibración, ensamble de semillas y cabeza multitarea (código, sin reentrenar)"""
+
+  def test_temperatura_suaviza_sobreconfianza(self):
+    from .calibracion import CalibradorTemperatura
+    rng = np.random.default_rng(0)
+    probs = np.tile([0.9, 0.05, 0.05], (500, 1))          # predictor sobreconfiado
+    y = rng.choice([0, 1, 2], size=500, p=[0.7, 0.15, 0.15])  # tasa real
+    cal = CalibradorTemperatura().ajustar(probs, y)
+    self.assertGreater(cal.T, 1.0)
+    calibradas = cal.calibrar(probs)
+    self.assertTrue(np.allclose(calibradas.sum(axis=1), 1.0))
+    self.assertLess(calibradas[:, 0].mean(), 0.9)
+
+  def test_ensamble_semillas_promedia(self):
+    from .predictores import PredictorEnsambleSemillas
+
+    class Fake:
+      def predecir(self, lote):
+        return np.ones((len(lote), 2))
+
+    ens = PredictorEnsambleSemillas([Fake(), Fake()])
+    self.assertTrue(np.allclose(ens.predecir(np.zeros((5, 2))), np.ones((5, 2))))
+
+  def test_construir_modelo_multitarea(self):
+    from .predictores import PredictorKeras
+    modelo = PredictorKeras.construir_modelo(1, 10, 5, con_cabeza_resultado=True)
+    self.assertEqual(len(modelo.outputs), 2)
 
 
 class XgRollingTests(SimpleTestCase):

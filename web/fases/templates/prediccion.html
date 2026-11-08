@@ -1,3 +1,21 @@
+<style>
+    /* H.4 (minimo): tipografia y tablas legibles; el cuadro de campeones usa la misma clase */
+    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 1.5rem; color: #1f2937; }
+    h1 { font-size: 1.5rem; }
+    fieldset { border: 1px solid #e5e7eb; border-radius: 8px; margin: 1rem 0; padding: .5rem .75rem; }
+    legend { font-weight: 600; }
+    table { border-collapse: collapse; margin: 1rem 0; min-width: 20rem; }
+    caption { font-weight: 700; text-align: left; margin-bottom: .35rem; }
+    th, td { border: 1px solid #d1d5db; padding: .3rem .6rem; text-align: left; }
+    thead th { background: #f3f4f6; }
+    button { background: #2563eb; color: #fff; border: 0; border-radius: 6px; padding: .5rem 1rem; cursor: pointer; }
+    #tabla-campeones table { min-width: 32rem; }
+    .llave { display: flex; gap: 1.5rem; align-items: flex-start; margin: 1rem 0; overflow-x: auto; }
+    .ronda { display: flex; flex-direction: column; gap: .75rem; min-width: 16rem; }
+    .partido-llave { border: 1px solid #d1d5db; border-radius: 6px; padding: .4rem .6rem; background: #fafafa; }
+    .titulo-llave { font-weight: 700; margin: 1.2rem 0 .5rem; }
+    .ronda-titulo { font-weight: 600; font-size: .85rem; color: #6b7280; margin-bottom: .25rem; }
+</style>
 <form method="POST" action="{% url 'procesar_recepcion_0' %}">
     {% csrf_token %}
 
@@ -16,6 +34,8 @@
     </fieldset>
     <div id="tabla-terceros"></div>
     <div id="tabla-llave"></div>
+    <div id="tabla-campeones"></div>
+    <div id="llave-visual"></div>
 
     <input type="hidden" name="recepcion" id="recepcion">
     <input type="hidden" name="ApagadoEncendido" id="onoff" value="off">
@@ -40,6 +60,11 @@
         let editor_reglamento = document.getElementById("editor-reglamento");
         var entradas = [];
         let dataset = [];
+
+        // estado de la demo: año actual, partidos reales del año y la última predicción (cubre todo el torneo)
+        let agno_actual = null;
+        let partidos_reales = "";
+        let prediccion_actual = null;
 
         var DicHomeAwayIds = new Map();
         
@@ -69,110 +94,84 @@
         
         function genera_torneos_del_agno(event, dic_back, agno)
         {
-            const newValue = event.target;
-            /* meto en la variable "opciones_0" todas las fases presentes en los options 
-               del label que llama a "genera_torneos_del_agno"
-            */
-            opciones_0 = newValue.options;
-            let fase_actual = "";
-            let opcion_id = "";
-            let selagno = "";
-
-            if(!(container_2.innerHTML==''))
+            /* al elegir una fase: si esa fase ya se predijo, se muestra su prediccion;
+               si no, se muestra el fixture real. Cambiar de fase no pierde nada. */
+            const selector = event.target;
+            const fase_actual = selector.options[selector.selectedIndex].text;
+            const n_partidos = dic_torneos[agno][fase_actual];
+            if (!(container_2.innerHTML == ''))
             {
-                /* si "container_2" tiene contenido, lo vacio para añadir nuevos partidos
-                */
                 container_2.innerHTML = '';
             }
 
-            /* referenciando con el indice de cada una, voy accediendo a todas las 
-               options de "opciones_0"
-            */
-            for(let i=0; i<opciones_0.length; i++)
+            /* la última predicción del año cubre TODO el torneo: al cambiar de fase se
+               muestra su parte para esa fase; si no hay predicción, el fixture real. */
+            if (prediccion_actual)
             {
-                op_0 = opciones_0[i];
-                /* op_0.value debe ser igual al value de la fase que presione para obtener
-                   tanto el nombre de la fase actual "fase_actual", como el numero de partidos  en la misma "opcion_id" y el año del mundial "selagno"
-                */
-                if(op_0.value==newValue.value)
-                {
-                    fase_actual = op_0.text;
-                    opcion_id = op_0.id;
-                    selagno = agno;
-                }
+                document.getElementById("EsteEsMiMensaje").value = prediccion_actual.partidos;
+                acomodador([fase_actual, n_partidos], agno);
+                restaurarResultados(prediccion_actual);
             }
-
-            acomodador([fase_actual, opcion_id], selagno);
+            else
+            {
+                document.getElementById("EsteEsMiMensaje").value = partidos_reales;
+                acomodador([fase_actual, n_partidos], agno);
+                limpiarResultados();
+            }
         }
 
         function busca_torneos_del_agno(event)
         {
-            if(!(container_1.innerHTML==''))
+            const selector = event.target;
+            const nuevo_agno = selector.options[selector.selectedIndex].text;
+
+            /* si se cambia de mundial (o se reselecciona), se borra todo lo predicho del anterior */
+            if (nuevo_agno !== agno_actual)
+            {
+                agno_actual = nuevo_agno;
+                prediccion_actual = null;
+                limpiarResultados();
+            }
+
+            if (!(container_1.innerHTML == ''))
             {
                 container_1.innerHTML = '';
             }
+            if (!(container_2.innerHTML == ''))
+            {
+                container_2.innerHTML = '';
+            }
 
+            const fases = dic_torneos[nuevo_agno] || {};
             let cuenta = 0;
-            /* creo un select "select_0_fases" para almacenar el nombre de cada
-               fase del mundial del año indicado.
-            */
             let select_0_fases = document.createElement("select");
-            let agno = 0;
-
-            var new_vardic = "";
-
-            /* Contiene los años a iterar
-            */
-            const newValue = event.target;
             select_0_fases.class = "torneos";
-            /* ".class" es una propiedad propia de JS (la usan "enviarSeleccion_1" e "inversion_de_equipos"); el id
-               es lo que permite encontrar el select desde la respuesta de "Predecir"
-            */
             select_0_fases.id = "torneos";
 
-            /* iteracion sobre todos los nodos hijos del select de años con mundial
-            */
-            for(i=0; i<Object.keys(dic_torneos).length; i++)
+            Object.entries(fases).forEach(([clave_1, valor_1]) =>
             {
-                /* condicional de, si es igual el valor del option hijo iterado actualmente, 
-                   al value del option seleccinado, pasado por "newValue"
-                */
-                if(newValue.children[i].value==newValue.value)
-                {
-                    /* contenido (fases) en "dic_torneos" para la clave igual al año del  
-                       mundial seleccionado
-                    */
-                    new_vardic = dic_torneos[newValue.children[i].text];
-                    /* año registrado por el option donde se dio click en el select
-                    */
-                    agno = newValue.children[i].text;
-                    Object.entries(new_vardic).forEach(([clave_1, valor_1])=>
-                    {
-                       /* se genera un option que contiene el nombre de la fase del mundial y
-                          un value para señalar a cada una, además de agregar el numero de partidos por fase, al id del option creado
-                       */
-                       op1 = new Option(clave_1, cuenta);
-                       op1.id = valor_1;
-                       /* se almacena  dicho option en el select contenedor de las fases del
-                          mundial seleccionado
-                       */
-                       select_0_fases.appendChild(op1);
-                       cuenta+=1;
-                    });
-                }
-            }
-            /* Tras definir los desafios del mundial en "new_vardic" y el nombre de este
-               en "agno" agrego al select, con estas variables mencionadas como argumento,
-               la funcion "genera_torneos_del_agno"
-            */
-            select_0_fases.addEventListener("click", function(event) // change
+                let op1 = new Option(clave_1, cuenta);
+                op1.id = valor_1;
+                select_0_fases.appendChild(op1);
+                cuenta += 1;
+            });
+
+            /* al cambiar de fase: se pinta su prediccion guardada o el fixture real */
+            select_0_fases.addEventListener("change", function (ev)
             {
                 entradas.length = 0;
-                genera_torneos_del_agno(event, new_vardic, agno);
+                genera_torneos_del_agno(ev, fases, nuevo_agno);
             });
-            /* agrego finalmente al container "container_1" el "select_0_fases"
-            */
+
             container_1.appendChild(select_0_fases);
+
+            /* se pinta ya la primera fase (arregla que 1934 solo apareciera tras elegir otro) */
+            if (select_0_fases.options.length)
+            {
+                select_0_fases.selectedIndex = 0;
+                entradas.length = 0;
+                genera_torneos_del_agno({target: select_0_fases}, fases, nuevo_agno);
+            }
         }
 
         function inversion_de_equipos(event)
@@ -463,8 +462,7 @@
 
         function enviarSeleccion_0()
         {
-            /* esta funcion obtiene los partidos del mundial seleccionado por el usuario
-            */
+            /* esta funcion obtiene los partidos del mundial seleccionado por el usuario */
             let datos = {};
             /* si el input oculto esta en modo apagado
             */
@@ -482,33 +480,24 @@
                 };
             }
 
-            /* se define el metodo (POST) el header con el tipo de datos que tendra el body y 
-               el cuerpo o body del mensaje en formato JSON
-            */
-            fetch("{% url 'procesar_recepcion_0' %}", {
+            /* se define el metodo (POST), el header y el body; se devuelve la promesa para
+               poder esperar a que lleguen los partidos reales antes de pintar la fase */
+            return fetch("{% url 'procesar_recepcion_0' %}", {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': '{{ csrf_token }}'
                 },
-                /* Convertir los datos a JSON
-                */
                 body: JSON.stringify(datos)
             })
-            .then(response => 
-            {
-                /* parsear la respuesta del servidor en formato JSON (convertir cadena JSON a un objeto usable en un documento javascript)
-                */
-                return response.json();
-            })
+            .then(response => response.json())
             .then(data =>
             {
-                /* se asigna al input de id "EsteEsMiMensaje" el contenido de los partidos  
-                   recuperados de un mundial
-                */
-                document.getElementById("EsteEsMiMensaje").value = data.partidos_reales;
+                partidos_reales = data.partidos_reales;
+                document.getElementById("EsteEsMiMensaje").value = partidos_reales;
+                dataset = [];
             })
-            dataset=[];
+            .catch(() => { dataset = []; });
         }
 
         function enviarSeleccion_1()
@@ -610,18 +599,36 @@
                     */
                     n_partidos = dic_torneos[agno_selec][fase_selec];
 
-                    /* ya con la fase, el numero de partidos y el año, se ejecuta de nuevo la
-                       funcion "acomodador", vaciando antes los partidos pintados (como hace el select de fases)
-                    */
+                    /* se guarda la predicción (cubre todo el torneo): al cambiar de fase no se pierde */
+                    const prediccion = {
+                        partidos: data.partidos,
+                        mejores_terceros: data.mejores_terceros,
+                        llave_octavos: data.llave_octavos,
+                        campeones: null,
+                    };
+                    prediccion_actual = prediccion;
+
+                    /* se repinta la fase con sus resultados y se restauran sus tablas */
                     container_2.innerHTML = '';
                     entradas.length = 0;
                     acomodador([fase_selec, n_partidos], agno_selec);
+                    restaurarResultados(prediccion);
 
-                    /* se pintan las tablas de mejores terceros y emparejamientos de octavos
-                       (solo llegan en los mundiales 1986, 1990 y 1994)
+                    /* Etapa G: peticion paralela del cuadro de campeones; si falla, solo se ve lo de siempre
                     */
-                    pintarTabla("tabla-terceros", "Mejores terceros", data.mejores_terceros);
-                    pintarTabla("tabla-llave", "Emparejamientos de octavos", data.llave_octavos);
+                    fetch("{% url 'api_probabilidades' %}", {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+                        body: JSON.stringify({ recepcion: ArrayLlis, drop_metricas: leerDropMetricas(), metricas_opcionales: leerMetricasOpcionales() })
+                    })
+                    .then(respuesta => respuesta.json())
+                    .then(datos => {
+                        prediccion.campeones = datos.campeones;
+                        const actual = document.getElementById("torneos");
+                        if (actual && actual.options[actual.selectedIndex].text === fase_selec)
+                            pintarCampeones(datos.campeones);
+                    })
+                    .catch(() => pintarCampeones(null));
                 }
             })
         }
@@ -774,8 +781,97 @@
             contenedor.appendChild(tabla);
         }
 
-        /* Función para obtener el token CSRF
+        /* Etapa G: cuadro de los 5 campeones mas probables (campeones = [{pais, campeon, final, semifinal}])
         */
+        function pintarCampeones(campeones)
+        {
+            const contenedor = document.getElementById("tabla-campeones");
+            contenedor.innerHTML = "";
+            if (!campeones || !campeones.length) return;
+            const tabla = crearTabla("Campeones más probables", ["#", "Selección", "% campeón", "% final", "% semifinal"]);
+            campeones.forEach((f, i) =>
+            {
+                const fila = tabla.insertRow();
+                fila.insertCell().textContent = i + 1;
+                fila.insertCell().textContent = f.pais;
+                fila.insertCell().textContent = (100 * f.campeon).toFixed(1) + "%";
+                fila.insertCell().textContent = (100 * f.final).toFixed(1) + "%";
+                fila.insertCell().textContent = (100 * f.semifinal).toFixed(1) + "%";
+            });
+            contenedor.appendChild(tabla);
+        }
+
+        /* limpia las tablas de resultados (al cambiar de año o de fase sin predicción) */
+        function limpiarResultados()
+        {
+            ["tabla-terceros", "tabla-llave", "tabla-campeones", "llave-visual"].forEach(id =>
+            {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = "";
+            });
+        }
+
+        /* restaura las tablas de una predicción guardada */
+        function restaurarResultados(prediccion)
+        {
+            pintarTabla("tabla-terceros", "Mejores terceros", prediccion.mejores_terceros);
+            pintarTabla("tabla-llave", "Emparejamientos de octavos", prediccion.llave_octavos);
+            pintarLlave(JSON.parse(prediccion.partidos || "[]"), agno_actual);
+            if (prediccion.campeones) pintarCampeones(prediccion.campeones);
+        }
+
+        /* H.4: cuadro eliminatorio visual con las probabilidades por partido
+        */
+        function pintarLlave(partidos, agno)
+        {
+            const contenedor = document.getElementById("llave-visual");
+            contenedor.innerHTML = "";
+            if (!partidos || !partidos.length) return;
+
+            const fases = dic_torneos[agno] || {};
+            const n_grupos = fases["Fase de Grupos"] || 0;
+            const knock = partidos.slice(n_grupos);
+            if (!knock.length) return;
+
+            const claves = ["16vos", "octavos", "cuartos", "semifinal", "final"];
+            const nombres = {"16vos": "16vos", "octavos": "Octavos", "cuartos": "Cuartos", "semifinal": "Semifinal", "final": "Final"};
+
+            const titulo = document.createElement("div");
+            titulo.className = "titulo-llave";
+            titulo.textContent = "Cuadro eliminatorio (predicción)";
+            contenedor.appendChild(titulo);
+
+            const cuadro = document.createElement("div");
+            cuadro.className = "llave";
+            let offset = 0;
+            for (const c of claves)
+            {
+                const n = fases[c];
+                if (!n) continue;
+                const col = document.createElement("div");
+                col.className = "ronda";
+                const cab = document.createElement("div");
+                cab.className = "ronda-titulo";
+                cab.textContent = nombres[c];
+                col.appendChild(cab);
+                for (let i = 0; i < n; i++)
+                {
+                    /* la final es el ULTIMO partido del torneo; el 3er puesto (penultimo) no entra en la llave */
+                    const p = (c === "final") ? knock[knock.length - 1] : knock[offset + i];
+                    if (!p) continue;
+                    const ficha = document.createElement("div");
+                    ficha.className = "partido-llave";
+                    const probs = (p.probs && p.probs.length === 3)
+                        ? ` — ${Math.round(p.probs[0] * 100)}% / ${Math.round(p.probs[1] * 100)}% / ${Math.round(p.probs[2] * 100)}%`
+                        : "";
+                    ficha.textContent = `${p.home}  ${p.score}  ${p.away}${probs}`;
+                    col.appendChild(ficha);
+                }
+                offset += n;
+                cuadro.appendChild(col);
+            }
+            contenedor.appendChild(cuadro);
+        }
         function getCookie(name) 
         {
             let cookieValue = null;
@@ -818,16 +914,22 @@
 
             /* se agrega al select "select_0_mundiales" la funcion "busca_torneos_del_agno"
             */
-            select_0_mundiales.addEventListener("change", busca_torneos_del_agno);
-            select_0_mundiales.onchange=function(){enviarSeleccion_0()};
-            /* se muestra u oculta el editor de reglamento de mejores terceros segun el año elegido
-            */
-            select_0_mundiales.addEventListener("change", e => mostrarEditorReglamento(e.target.options[e.target.selectedIndex].text));
+            /* al cambiar de mundial: primero llegan los partidos reales y luego se pintan fases */
+            select_0_mundiales.addEventListener("change", async (event) =>
+            {
+                await enviarSeleccion_0();
+                busca_torneos_del_agno(event);
+                mostrarEditorReglamento(event.target.options[event.target.selectedIndex].text);
+            });
             /* se referencia al contenedor de inputs "container_0" que esta de antemano
                en  el "document" para agregarle el select "select_0_mundiales" donde
                estan todos los años con mundiales de futbol (quitando el 1930)
             */
             container_0.appendChild(select_0_mundiales);
+
+            /* pinta el primer mundial al cargar (asi 1934 aparece sin trucos) */
+            select_0_mundiales.selectedIndex = 0;
+            enviarSeleccion_0().then(() => busca_torneos_del_agno({target: select_0_mundiales}));
 
             pintarCasillasMetricas("metricas-base", CATALOGO_METRICAS.base, "base");
             pintarCasillasMetricas("metricas-opcionales", CATALOGO_METRICAS.opcionales, "opcional");

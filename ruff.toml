@@ -1,0 +1,9 @@
+# ruff (H.2). El CI lo ejecuta; los ajustes no cambian el comportamiento de la app.
+# Instalar localmente para lint:  python -m pip install ruff  →  ruff check .
+line-length = 120
+target-version = "py312"
+
+[lint]
+# Arranca con errores reales (E9) y Pyflakes (F): nombres sin definir, imports sin usar, etc.
+# Se puede endurecer después (E, W, I, N) sin tocar la lógica.
+select = ["E9", "F"]

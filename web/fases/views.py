@@ -3,10 +3,13 @@ from django.http import JsonResponse
 from .models import partidos, fixtures, grupos, clasificaciones
 from django.core.serializers.json import DjangoJSONEncoder
 import json
+import logging
 import pandas as pd
 import numpy as np
 
 from .modulo import *
+
+logger = logging.getLogger(__name__)
 
 agnos = ["1934", "1938", "1950", "1954", "1958", "1962", "1966", "1970", "1974", "1978", "1982", "1986", "1990", "1994", "1998", "2002", "2006", "2010", "2014", "2018", "2026", "2022"]
 
@@ -22,7 +25,7 @@ def formar_dataset_consulta(valores):
     """
     dfd = pd.DataFrame()
     for val0, val1 in zip(valores[2:], range(len(valores[2:]))):
-        print(f"val0\n{val0}")
+        logger.debug("val0\n%s", val0)
         dfd = pd.concat([dfd, pd.DataFrame(data=np.array([[val0[0], int(val0[2]), int(val0[3]), val0[1]]]), columns=["home", "score_0", "score_1", "away"])], axis=0)
     dfd = dfd.reset_index(drop=True)#.iloc[:,1:]
 
@@ -78,10 +81,10 @@ def procesar_recepcion_0(request):
         opcion_0 = data.get('fecha', None)
         if(opcion_0 in agnos):
             df = formar_dataset_real("partidos", opcion_0)
-            print(f"df:\n{df}")
+            logger.debug("df:\n%s", df)
             json_records_0 = df.to_json(orient='records')
             context = {'partidos_reales': json_records_0}
-            print(f"Estos son mis partidos\n{df}")
+            logger.debug("Estos son mis partidos\n%s", df)
             return(JsonResponse(context))
 
     return(render(request, "prediccion.html", {"reglamentos_terceros": reglamentos_oficiales(), "catalogo_metricas": catalogo_metricas()}))
@@ -112,9 +115,11 @@ def predecir_recepcion(data):
 def _respuesta_json(respuesta, recepcion):
     """DataFrame de consulta_general -> JSON de la web/API (partidos, terceros y llave)"""
     extras = dict(respuesta.attrs)
+    probs = extras.get("probs")
     respuesta = respuesta.reset_index(drop=True)
-    partidos = [{"home": row.home, "score": f"{int(row.score_0)}:{int(row.score_1)}", "away": row.away}
-                for row in respuesta.itertuples()]
+    partidos = [{"home": row.home, "score": f"{int(row.score_0)}:{int(row.score_1)}", "away": row.away,
+                 "probs": probs[i] if probs else None}
+                for i, row in enumerate(respuesta.itertuples())]
     payload = {"year": int(recepcion[0]), "partidos": partidos}
     for clave in ("mejores_terceros", "llave_octavos"):
         if clave in extras:
@@ -140,7 +145,7 @@ def procesar_recepcion_1(request):
                         payload[clave] = json.dumps(payload[clave], ensure_ascii=False)
                 return JsonResponse(payload)
         except json.JSONDecodeError as e:
-            print(f"Error al decodificar JSON: {e}")
+            logger.exception("Error al decodificar JSON")
             return JsonResponse({'error': 'JSON inválido'}, status=400)
 
     return JsonResponse({'error': 'Método no permitido'}, status=405)

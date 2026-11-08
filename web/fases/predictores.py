@@ -166,8 +166,11 @@ class PredictorKeras:
     self.modelo, self.config = modelo, config
 
   @staticmethod
-  def construir_modelo(n_pasos, n_valores, n_paises, unidades=32, dim_pais=8):
-    """Arma y compila la red descrita en la clase; el id n_paises queda para equipos desconocidos"""
+  def construir_modelo(n_pasos, n_valores, n_paises, unidades=32, dim_pais=8, con_cabeza_resultado=False):
+    """Arma y compila la red descrita en la clase; el id n_paises queda para equipos desconocidos.
+
+    ``con_cabeza_resultado`` (D.2) añade una segunda salida softmax que predice directamente
+    local / empate / visitante, con pérdida de entropía cruzada."""
     import keras
     from keras import layers
 
@@ -184,7 +187,14 @@ class PredictorKeras:
       return salida(oculta(layers.Concatenate()([atacante, defensor])))
 
     e_0, e_1 = equipo(seq_0, id_0), equipo(seq_1, id_1)
-    modelo = keras.Model([seq_0, seq_1, id_0, id_1], layers.Concatenate(name="lambdas")([goles(e_0, e_1), goles(e_1, e_0)]))
+    lambdas = layers.Concatenate(name="lambdas")([goles(e_0, e_1), goles(e_1, e_0)])
+    if con_cabeza_resultado:
+      resultado = layers.Dense(3, activation="softmax", name="resultado")(layers.Concatenate()([e_0, e_1]))
+      modelo = keras.Model([seq_0, seq_1, id_0, id_1], [lambdas, resultado])
+      modelo.compile(optimizer=keras.optimizers.Adam(1e-3),
+                     loss={"lambdas": "poisson", "resultado": "sparse_categorical_crossentropy"})
+      return modelo
+    modelo = keras.Model([seq_0, seq_1, id_0, id_1], lambdas)
     modelo.compile(optimizer=keras.optimizers.Adam(1e-3), loss="poisson")
     return modelo
 
@@ -281,6 +291,11 @@ class PredictorKeras:
     secuencias = lote.secuencias if lote.secuencias is not None else self.secuencias_desde_tabla(lote.tabla)
     return self.modelo.predict(self.entradas(secuencias), verbose=0, batch_size=512)
 
+  def probabilidades(self, lote):
+    """(n, 3) de gana local / empate / gana visitante desde las dos Poisson de sus goles esperados."""
+    from .evaluacion import probabilidades_resultado
+    return probabilidades_resultado(self.predecir(lote))
+
   def guardar_pesos(self, carpeta):
     Path(carpeta).mkdir(parents=True, exist_ok=True)
     self.modelo.save(Path(carpeta) / self.ARCHIVO)
@@ -353,6 +368,36 @@ class PredictorElo:
 
   def a_esquema(self):
     return {"backend": self.nombre, "coef": self.coef}
+
+
+class PredictorEnsambleSemillas:
+  """D.1 · Ensamble de semillas: promedia los goles esperados de N redes entrenadas igual
+  con semillas distintas. No se entrena solo; envuelve modelos ya cargados."""
+  nombre = "ensamble_semillas"
+
+  def __init__(self, modelos):
+    self.modelos = modelos
+
+  def predecir(self, lote):
+    return np.mean([m.predecir(lote) for m in self.modelos], axis=0)
+
+  def a_esquema(self):
+    return {"backend": self.nombre,
+            "semillas": [m.config.get("semilla") for m in self.modelos if hasattr(m, "config")]}
+
+
+def entrenar_con_tuner(dataset, secuencias, filas_entrenamiento, filas_validacion, **kwargs):
+  """D.3 · Búsqueda de hiperparámetros con Keras Tuner (arquitectura, dropout, lr, batch).
+
+  Requiere instalar la dependencia opcional: ``pip install keras-tuner``. Es un arnés de
+  búsqueda sobre la validación móvil; no toca la prueba."""
+  try:
+    import keras_tuner  # noqa: F401
+  except ImportError as error:
+    raise RuntimeError("Para la etapa D.3 instala keras-tuner: pip install keras-tuner") from error
+  # El barrido concreto (espacios de búsqueda de Keras Tuner) se define al ejecutarlo; aquí
+  # queda el punto de entrada que usa construir_modelo con sus opciones (D.2/D.3).
+  raise NotImplementedError("Define el espacio de búsqueda de Keras Tuner antes de ejecutar el barrido")
 
 
 # backend -> constructor desde (esquema, carpeta); cada backend nuevo se registra aqui

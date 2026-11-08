@@ -24,6 +24,7 @@ from fake_useragent import UserAgent
 
 from selenium.webdriver import Firefox
 from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -31,6 +32,7 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 import re
 import time
+from pathlib import Path
 import numpy as np
 import pandas as pd
 
@@ -56,7 +58,17 @@ def crear_driver():
     options = Options()
     # 'general.useragent.override' es la preferencia que realmente cambia el user agent en Firefox
     options.set_preference("general.useragent.override", useragent.random)
-    driver = Firefox(options=options)
+    # Firefox debe estar instalado; se da la ruta explícita por si el registro no la expone
+    firefox = r"C:\Program Files\Mozilla Firefox\firefox.exe"
+    if Path(firefox).exists():
+        options.binary_location = firefox
+    # geckodriver por defecto crea el perfil en %TEMP% y en algunos equipos falla con
+    # "Unable to write to temporary directory" (salida 64); se usa un perfil escribible
+    # dentro del propio proyecto (data/proxy_desempegno/.firefox_profile).
+    perfil = PROXY_DESEMPEGNO / ".firefox_profile"
+    perfil.mkdir(parents=True, exist_ok=True)
+    service = Service(service_args=["--profile-root", str(perfil)])
+    driver = Firefox(options=options, service=service)
     driver.implicitly_wait(7)
     driver.maximize_window()
     return driver
