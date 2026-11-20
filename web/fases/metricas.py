@@ -4,7 +4,6 @@ Métricas derivadas por partido (gkps, mds, mos, mms, rate_GF/rate_GC).
 Extraído de modulo.py en el refactor H.2: funciones puras sobre Series de pandas, sin acceso
 a la base de datos. Las usa calculo_metricas_0 (modulo.py).
 """
-import pandas as pd
 
 
 def _por_partido(valor, PJ):

@@ -7,7 +7,8 @@ from pathlib import Path
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
-from fases.modulo import consulta_general, formar_dataset_real
+from fases.modulo import formar_dataset_real
+from fases.simulacion import consulta_general
 
 RAIZ = Path(settings.BASE_DIR).parent
 SNAPSHOT = RAIZ / "experimentos" / "snapshot_consulta.json"

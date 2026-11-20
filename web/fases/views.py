@@ -1,13 +1,13 @@
 from django.shortcuts import render
 from django.http import JsonResponse
-from .models import partidos, fixtures, grupos, clasificaciones
-from django.core.serializers.json import DjangoJSONEncoder
 import json
 import logging
 import pandas as pd
 import numpy as np
 
-from .modulo import *
+from .formatos import ReglamentoInvalido, ReglamentoTerceros, reglamentos_oficiales
+from .modulo import BASE_METRICS, DROP_METRICS, OPTIONAL_METRICS, formar_dataset_real, validar_valores_neutros
+from .simulacion import consulta_general
 
 logger = logging.getLogger(__name__)
 
@@ -144,7 +144,7 @@ def procesar_recepcion_1(request):
                     if clave in payload:
                         payload[clave] = json.dumps(payload[clave], ensure_ascii=False)
                 return JsonResponse(payload)
-        except json.JSONDecodeError as e:
+        except json.JSONDecodeError:
             logger.exception("Error al decodificar JSON")
             return JsonResponse({'error': 'JSON inválido'}, status=400)
 

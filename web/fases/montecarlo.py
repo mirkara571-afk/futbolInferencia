@@ -6,14 +6,13 @@ esperados (lambda de Poisson) de todas las parejas de equipos que siguen vivos, 
 métricas al inicio de la fase simulada y sortea cada marcador de su Poisson.
 
 Alcance v2:
-- Desde la fase de grupos: 1958–1970 (4 grupos → cuartos), 1986/1990/1994 (mejores terceros),
+- Desde la fase de grupos: 1934/1938 (eliminatoria), 1950 (liguilla final), 1954–1970
+  (4 grupos → cuartos; 1954 es aproximado: los playoffs de desempate se cuentan como partidos
+  de grupo y se usan 3 puntos), 1974/1978/1982 (segunda fase), 1986/1990/1994 (mejores terceros),
   1998–2022 (llave de 16) y 2026 (12 grupos, 8 mejores terceros, llave de 32).
-- Desde fases knockout del formato moderno (1998–2022): octavos, cuartos, semifinal y final,
+- Desde fases knockout: 1998–2022 y 2026 (dieciseisavos, octavos, cuartos, semifinal y final),
   rejugando las fases previas con sus resultados reales.
 - Reglamento de mejores terceros personalizado (1986/1990/1994/2026).
-
-No soportado todavía: 1934/1938 (replay), 1950 (fase final), 1954 (grupos con playoff),
-1974/1978/1982 (segunda fase de grupos) y las fases knockout de 2026.
 """
 from __future__ import annotations
 
@@ -30,7 +29,6 @@ from .modulo import (
     calculo_metricas_0,
     desempates_reales,
     formar_dataset_real,
-    func_prediccion_orden,
     internacionales,
     obtener_clasificaciones,
     obtener_dic_agnos,
@@ -38,10 +36,15 @@ from .modulo import (
     reiniciar_opcionales,
     resultados_reales,
 )
+from .simulacion import func_prediccion_orden
 
-_HISTORICOS_8 = (1958, 1962, 1966, 1970)                       # 4 grupos numerados -> cuartos (8)
+_HISTORICOS_8 = (1954, 1958, 1962, 1966, 1970)                # 4 grupos numerados -> cuartos (8)
 _MODERNOS_16 = (1998, 2002, 2006, 2010, 2014, 2018, 2022)     # 8 grupos -> octavos (16)
 _TERCEROS = (1986, 1990, 1994, 2026)                          # mejores terceros
+_ELIMINACION = (1934, 1938)                                    # eliminatoria pura (sin grupos)
+_FINAL_ROUND = (1950,)                                         # grupos + liguilla final de 4
+_SEGUNDA_FASE_4 = (1974, 1978)                                 # grupos + 2da fase (2 grupos de 4) + final
+_SEGUNDA_FASE_3 = (1982,)                                      # grupos + 2da fase (4 grupos de 3) + semis + final
 
 # etiqueta de fase del frontend -> fase interna de func_prediccion_orden.lista_fases
 _FASES = {
@@ -49,9 +52,11 @@ _FASES = {
     "octavos": "knockout", "knockout": "knockout",
     "cuartos": "quarter", "quarter": "quarter",
     "semifinal": "semi", "semi": "semi",
+    "dieciseisavos": "dieciseisavos",
     "final": "final",
 }
 _KNOCKOUT_MODERNO = ("knockout", "quarter", "semi", "final")
+_KNOCKOUT_2026 = ("dieciseisavos", "knockout", "quarter", "semi", "final")
 
 
 def _ganador(rng, lambdas, i, j):
@@ -188,7 +193,7 @@ def _construir_objs(agno, drop_metricas, metricas_opcionales):
     objs.primera_fase = "grupo"
     objs.ind0 = ["grupo", "grupo"]
     objs.anfitriones = {
-        objs.pais_id[n] for n in internacionales.objects.filter(categoria="mundial", agno=str(agno), neutral="0")
+        objs.pais_id[n] for n in internacionales.objects.filter(categoria="mundial", agno=agno, neutral="0")
         .values_list("home", flat=True).distinct() if n in objs.pais_id
     }
     proxy = formar_dataset_real("proxy_desempegno")
@@ -244,6 +249,60 @@ def _orden_desde_df(df_fase):
     return [int(x) for pareja in zip(df_fase["home"], df_fase["away"]) for x in pareja]
 
 
+def _es_primera_fase(nombre):
+    """True si el grupo es de primera fase ("Grupo 1".."Grupo 9"); False si es de segunda ("Grupo A"..)."""
+    return nombre.rsplit(" ", 1)[-1].isdigit()
+
+
+def _pares_3(equipos):
+    return [(equipos[0], equipos[1]), (equipos[1], equipos[2]), (equipos[0], equipos[2])]
+
+
+def _orden_1934_38(df2):
+    """Orden de cuadro de 1934/1938: los equipos únicos en el orden del fixture (ignora replays)."""
+    orden = []
+    for pareja in zip(df2["home"], df2["away"]):
+        for x in pareja:
+            x = int(x)
+            if x not in orden:
+                orden.append(x)
+    return orden
+
+
+def _simular_1950(rng, lambdas, grupos_partidos):
+    """1950: 4 grupos -> liguilla final de 4 (todos contra todos). El 1ro es el campeón."""
+    campeones = [_jugar_grupo(rng, lambdas, partidos)[0]["pais"] for partidos in grupos_partidos.values()]
+    partidos = [(a, b) for i, a in enumerate(campeones) for b in campeones[i + 1:]]
+    tabla = _jugar_grupo(rng, lambdas, partidos)
+    return tabla[0]["pais"], tabla[1]["pais"], tuple(campeones)
+
+
+def _simular_1974_78(rng, lambdas, grupos_partidos):
+    """1974/1978: 4 grupos -> 2 grupos de 4 (segunda fase, composición fija) -> final."""
+    tablas = {g: _jugar_grupo(rng, lambdas, partidos) for g, partidos in grupos_partidos.items()}
+    a = [tablas["Grupo 3"][0]["pais"], tablas["Grupo 4"][1]["pais"], tablas["Grupo 2"][1]["pais"], tablas["Grupo 1"][0]["pais"]]
+    b = [tablas["Grupo 2"][0]["pais"], tablas["Grupo 1"][1]["pais"], tablas["Grupo 3"][1]["pais"], tablas["Grupo 4"][0]["pais"]]
+    ta = _jugar_grupo(rng, lambdas, [(a[i], a[j]) for i in range(4) for j in range(i + 1, 4)])
+    tb = _jugar_grupo(rng, lambdas, [(b[i], b[j]) for i in range(4) for j in range(i + 1, 4)])
+    campeon, perdedor = _ganador(rng, lambdas, ta[0]["pais"], tb[0]["pais"])
+    semifinalistas = tuple(sorted([ta[0]["pais"], tb[0]["pais"], ta[1]["pais"], tb[1]["pais"]]))
+    return campeon, perdedor, semifinalistas
+
+
+def _simular_1982(rng, lambdas, grupos_partidos):
+    """1982: 6 grupos -> 4 grupos de 3 (segunda fase) -> semis (A-C, B-D) -> final."""
+    tablas = {g: _jugar_grupo(rng, lambdas, partidos) for g, partidos in grupos_partidos.items()}
+    a = [tablas["Grupo 1"][0]["pais"], tablas["Grupo 3"][0]["pais"], tablas["Grupo 6"][1]["pais"]]
+    b = [tablas["Grupo 2"][0]["pais"], tablas["Grupo 4"][0]["pais"], tablas["Grupo 5"][1]["pais"]]
+    c = [tablas["Grupo 1"][1]["pais"], tablas["Grupo 3"][1]["pais"], tablas["Grupo 6"][0]["pais"]]
+    d = [tablas["Grupo 2"][1]["pais"], tablas["Grupo 4"][1]["pais"], tablas["Grupo 5"][0]["pais"]]
+    ta = _jugar_grupo(rng, lambdas, _pares_3(a))
+    tb = _jugar_grupo(rng, lambdas, _pares_3(b))
+    tc = _jugar_grupo(rng, lambdas, _pares_3(c))
+    td = _jugar_grupo(rng, lambdas, _pares_3(d))
+    return simular_knockout(rng, lambdas, [ta[0]["pais"], tc[0]["pais"], tb[0]["pais"], td[0]["pais"]])
+
+
 def _replay_moderno(objs, df2, df3, dict_g, modelo, fase_int):
     """Rejuega el formato moderno (1998–2022) hasta ``fase_int`` con resultados reales.
 
@@ -282,6 +341,55 @@ def _replay_moderno(objs, df2, df3, dict_g, modelo, fase_int):
     return equipos, base, _orden_desde_df(df_final)
 
 
+def _replay_2026(objs, df2, df3, dict_g, modelo, fase_int, reglamento_obj):
+    """Rejuega el formato 2026 (12 grupos → llave de 32) hasta ``fase_int`` con resultados reales.
+
+    Devuelve ``(equipos, base, orden)`` de los vivos con métricas congeladas y orden de cuadro."""
+    from .formatos import alinear_llave_terceros
+
+    objs.ind0 = ["grupo", fase_int]
+    df_grupos = df2.copy()
+    dict_table = objs.fase_de_grupos(dict_g, df_grupos, modelo)
+
+    # dieciseisavos (Match 73–88) con las tablas de grupos ya jugadas y el reglamento de terceros
+    df_32 = alinear_llave_terceros(dict_table, reglamento_obj.agno, df_grupos=df_grupos, personalizado=reglamento_obj)
+    df_32.insert(1, "score", df3[["home", "score", "away"]].iloc[:16]["score"].to_numpy())
+    df_32 = objs.camb_grp_elm_smpl(df_grupos, df_32, dict_table)
+
+    if fase_int == "dieciseisavos":
+        equipos, base = _base_por_equipo(df_32)
+        return equipos, base, _orden_desde_df(df_32)
+
+    objs.n_partidos = df_grupos.shape[0] + 1
+    objs.ind0[0] = "dieciseisavos"
+    df_32 = objs.jugar(df_32, modelo)
+
+    df_knockout = objs.ordenar_elm_smpl(df_32, df3[["home", "score", "away"]].iloc[16:24].copy())
+    if fase_int == "knockout":
+        equipos, base = _base_por_equipo(df_knockout)
+        return equipos, base, _orden_desde_df(df_knockout)
+
+    objs.ind0[0] = "knockout"
+    df_knockout = objs.jugar(df_knockout, modelo)
+    df_quarter = objs.ordenar_elm_smpl(df_knockout, df3[["home", "score", "away"]].iloc[24:28].copy())
+    if fase_int == "quarter":
+        equipos, base = _base_por_equipo(df_quarter)
+        return equipos, base, _orden_desde_df(df_quarter)
+
+    objs.ind0[0] = "quarter"
+    df_quarter = objs.jugar(df_quarter, modelo)
+    df_semi = objs.ordenar_elm_smpl(df_quarter, df3[["home", "score", "away"]].iloc[28:30].copy())
+    if fase_int == "semi":
+        equipos, base = _base_por_equipo(df_semi)
+        return equipos, base, _orden_desde_df(df_semi)
+
+    objs.ind0[0] = "semi"
+    df_semi = objs.jugar(df_semi, modelo)
+    df_final = objs.ordenar_elm_smpl(df_semi, df3[["home", "score", "away"]].iloc[31].copy())
+    equipos, base = _base_por_equipo(df_final)
+    return equipos, base, _orden_desde_df(df_final)
+
+
 def probabilidades_campeon(recepcion, drop_metricas=(), metricas_opcionales=(), reglamento=None,
                            n=5000, semilla=0):
     """Simula ``n`` torneos desde la fase indicada y devuelve el cuadro de campeones.
@@ -302,30 +410,58 @@ def probabilidades_campeon(recepcion, drop_metricas=(), metricas_opcionales=(), 
 
     if fase == "grupo":
         equipos, base = _base_por_equipo(df2)
-        grupos_partidos = {}
-        for grupo, df in dict_g.items():
-            ids = {int(p) for p in df["pais"]}
-            grupos_partidos[grupo] = [(int(r.home), int(r.away)) for r in df2.itertuples()
-                                      if int(r.home) in ids and int(r.away) in ids]
-        if agno in _HISTORICOS_8:
-            orden_fn = _orden_cuartos_8
-        elif agno in _MODERNOS_16:
-            orden_fn = _orden_octavos_16
-        elif agno in _TERCEROS:
-            orden_fn = lambda tablas: _orden_llave_terceros(tablas, reglamento_obj)
+        lambdas = _lambdas_desde_base(objs, equipos, base, modelo, drop_metricas, metricas_opcionales)
+        cuenta = {}
+
+        if agno in _ELIMINACION:
+            orden = _orden_1934_38(df2)
+            for _ in range(n):
+                campeon, finalista, semifinalistas = simular_knockout(rng, lambdas, orden)
+                cuenta.setdefault(campeon, [0, 0, 0])[0] += 1
+                cuenta.setdefault(finalista, [0, 0, 0])[1] += 1
+                for equipo in semifinalistas:
+                    cuenta.setdefault(equipo, [0, 0, 0])[2] += 1
         else:
-            raise ValueError(f"Montecarlo no soporta el formato de {agno} todavía (1934/1938/1950/1954/1974/1978/1982)")
+            grupos_partidos = {}
+            for grupo, df in dict_g.items():
+                if agno in _SEGUNDA_FASE_4 + _SEGUNDA_FASE_3 and not _es_primera_fase(grupo):
+                    continue
+                ids = {int(p) for p in df["pais"]}
+                grupos_partidos[grupo] = [(int(r.home), int(r.away)) for r in df2.itertuples()
+                                          if int(r.home) in ids and int(r.away) in ids]
+            for _ in range(n):
+                if agno in _FINAL_ROUND:
+                    campeon, finalista, semifinalistas = _simular_1950(rng, lambdas, grupos_partidos)
+                elif agno in _SEGUNDA_FASE_4:
+                    campeon, finalista, semifinalistas = _simular_1974_78(rng, lambdas, grupos_partidos)
+                elif agno in _SEGUNDA_FASE_3:
+                    campeon, finalista, semifinalistas = _simular_1982(rng, lambdas, grupos_partidos)
+                elif agno in _HISTORICOS_8:
+                    campeon, finalista, semifinalistas = _simular_un_torneo(rng, lambdas, grupos_partidos, _orden_cuartos_8)
+                elif agno in _MODERNOS_16:
+                    campeon, finalista, semifinalistas = _simular_un_torneo(rng, lambdas, grupos_partidos, _orden_octavos_16)
+                elif agno in _TERCEROS:
+                    campeon, finalista, semifinalistas = _simular_un_torneo(rng, lambdas, grupos_partidos, lambda tablas: _orden_llave_terceros(tablas, reglamento_obj))
+                else:
+                    raise ValueError(f"Montecarlo no soporta el formato de {agno} todavía (1954)")
+                cuenta.setdefault(campeon, [0, 0, 0])[0] += 1
+                cuenta.setdefault(finalista, [0, 0, 0])[1] += 1
+                for equipo in semifinalistas:
+                    cuenta.setdefault(equipo, [0, 0, 0])[2] += 1
+
+    elif fase in _KNOCKOUT_MODERNO and agno in _MODERNOS_16:
+        equipos, base, orden = _replay_moderno(objs, df2, df3, dict_g, modelo, fase)
         lambdas = _lambdas_desde_base(objs, equipos, base, modelo, drop_metricas, metricas_opcionales)
         cuenta = {}
         for _ in range(n):
-            campeon, finalista, semifinalistas = _simular_un_torneo(rng, lambdas, grupos_partidos, orden_fn)
+            campeon, finalista, semifinalistas = simular_knockout(rng, lambdas, orden)
             cuenta.setdefault(campeon, [0, 0, 0])[0] += 1
             cuenta.setdefault(finalista, [0, 0, 0])[1] += 1
             for equipo in semifinalistas:
                 cuenta.setdefault(equipo, [0, 0, 0])[2] += 1
 
-    elif fase in _KNOCKOUT_MODERNO and agno in _MODERNOS_16:
-        equipos, base, orden = _replay_moderno(objs, df2, df3, dict_g, modelo, fase)
+    elif fase in _KNOCKOUT_2026 and agno == 2026:
+        equipos, base, orden = _replay_2026(objs, df2, df3, dict_g, modelo, fase, reglamento_obj)
         lambdas = _lambdas_desde_base(objs, equipos, base, modelo, drop_metricas, metricas_opcionales)
         cuenta = {}
         for _ in range(n):

@@ -35,9 +35,31 @@ EXTRAS = {
   "continental": ["local_continental_{i}"],            # juega en su propia confederacion
   "descanso": ["descanso_{i}"],                        # dias desde su partido anterior
   "grupo": ["pts_torneo_{i}", "pj_torneo_{i}"],        # puntos y partidos que lleva en este mundial
+  "ranking": ["ranking_{i}"],                          # posicion FIFA mas reciente previa al torneo (200 si falta)
 }
 # los que la simulacion de la app sabe calcular igual que el entrenamiento ("contexto_simulacion")
-EXTRAS_EN_APP = ("elo", "fase", "continental")
+EXTRAS_EN_APP = ("elo", "fase", "continental", "ranking")
+
+
+def ranking_por_agno():
+  """{(agno, pais): posición FIFA más reciente con fecha <= 1 de julio de ese año}. 200 si no hay dato.
+
+  Lee el modelo ``rankingfifa``; si la tabla no existe (tests sin BD) devuelve {} y el cálculo
+  usa el valor neutro 200."""
+  try:
+    from .models import rankingfifa
+    filas = list(rankingfifa.objects.order_by("fecha").values("fecha", "pais", "posicion"))
+  except Exception:
+    return {}
+  if not filas:
+    return {}
+  df = pd.DataFrame(filas)
+  salida = {}
+  for agno in range(1992, 2027):
+    vigente = df[df["fecha"] <= pd.Timestamp(year=agno, month=7, day=1)]
+    for pais, g in vigente.groupby("pais"):
+      salida[(agno, pais)] = int(g.iloc[-1]["posicion"])
+  return salida
 
 
 def mapa_paises(*dfs):
@@ -116,6 +138,7 @@ def agregar_contexto(ds, internacionales, fixtures=None):
 
   columnas = {c.format(i=i): [] for cs in EXTRAS.values() for c in cs for i in (0, 1)}
   torneo = {}  # (agno, pais) -> [puntos, partidos] en el mundial
+  ranking = ranking_por_agno()
 
   for r in ds.itertuples(index=False):
     ctx = mundiales.get(r.agno, {})
@@ -149,6 +172,7 @@ def agregar_contexto(ds, internacionales, fixtures=None):
       columnas[f"descanso_{i}"].append(descanso.get((fecha, p), DESCANSO_MAXIMO) if fecha else DESCANSO_MAXIMO)
       columnas[f"pts_torneo_{i}"].append(grupo[i][0])
       columnas[f"pj_torneo_{i}"].append(grupo[i][1])
+      columnas[f"ranking_{i}"].append(ranking.get((r.agno, p), 200))
     columnas["fase_final"].append(fase_final)
   return ds.assign(**columnas)
 

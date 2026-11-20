@@ -16,8 +16,6 @@ from scipy.special import expit
 from scipy.stats import poisson
 from statsmodels.miscmodels.ordinal_model import OrderedModel
 
-from .predictores import Lote, PredictorElo
-
 MAX_GOLES = 10
 
 
@@ -346,10 +344,107 @@ class PredictorDixonColes:
                xi=esquema.get("xi", 0.0), usar_elo=esquema.get("usar_elo", False), beta_elo=esquema.get("beta_elo", 0.0))
 
 
+class PredictorBradleyTerry:
+  """B.4 (contraste) · Bradley-Terry con empates (extensión de Davidson):
+  P(local) ∝ exp(f_home + h), P(visita) ∝ exp(f_away), P(empate) ∝ δ·√(ambas fuerzas).
+  Los goles esperados salen de esas mismas fuerzas como Poisson."""
+  nombre = "bradley_terry"
+
+  def __init__(self, equipos, fuerza, ventaja_local, empate):
+    self.equipos = [int(e) for e in equipos]
+    self.fuerza = np.asarray(fuerza, dtype=float)
+    self.ventaja_local = float(ventaja_local)
+    self.empate = float(empate)
+    self.indice = {e: i for i, e in enumerate(self.equipos)}
+    self.n = len(self.equipos)
+
+  @classmethod
+  def entrenar(cls, dataset, maxiter=250):
+    equipos = sorted(set(dataset["home_id"].astype(int)) | set(dataset["away_id"].astype(int)))
+    n = len(equipos)
+    if n < 2:
+      raise ValueError("Bradley-Terry necesita al menos 2 equipos")
+    indice = {e: i for i, e in enumerate(equipos)}
+    home = dataset["home_id"].map(indice).to_numpy(dtype=int)
+    away = dataset["away_id"].map(indice).to_numpy(dtype=int)
+    local_0 = dataset["local_0"].to_numpy(dtype=float)
+    local_1 = dataset["local_1"].to_numpy(dtype=float)
+    goles_0 = dataset["goles_0"].to_numpy(dtype=float)
+    goles_1 = dataset["goles_1"].to_numpy(dtype=float)
+    y = np.where(goles_0 > goles_1, 0, np.where(goles_0 == goles_1, 1, 2))
+
+    def desempaquetar(theta):
+      fuerza = np.concatenate([theta[:n - 1], [-theta[:n - 1].sum()]])
+      return fuerza, theta[n - 1], np.exp(theta[n])
+
+    def objetivo(theta):
+      fuerza, ventaja, delta = desempaquetar(theta)
+      t_h = fuerza[home] + ventaja * local_0
+      t_a = fuerza[away] + ventaja * local_1
+      s_h, s_a = np.exp(t_h), np.exp(t_a)
+      e = delta * np.exp((t_h + t_a) / 2)
+      denom = s_h + s_a + e
+      logv = np.where(y == 0, t_h, np.where(y == 1, np.log(e), t_a)) - np.log(denom)
+      share_h = (s_h + e / 2) / denom
+      share_a = (s_a + e / 2) / denom
+      g_h = np.where(y == 0, 1.0, np.where(y == 1, 0.5, 0.0)) - share_h
+      g_a = np.where(y == 2, 1.0, np.where(y == 1, 0.5, 0.0)) - share_a
+      g_f = np.zeros(n)
+      np.add.at(g_f, home, g_h)
+      np.add.at(g_f, away, g_a)
+      grad = np.empty(n + 1)
+      grad[:n - 1] = g_f[:n - 1] - g_f[-1]
+      grad[n - 1] = float(np.sum(g_h * local_0 + g_a * local_1))
+      grad[n] = float(np.sum(np.where(y == 1, 1.0, 0.0) - e / denom))
+      return -float(logv.sum()), -grad
+
+    theta_0 = np.zeros(n + 1)
+    theta_0[n - 1] = 0.2
+    theta_0[n] = np.log(0.3)
+    ajuste = minimize(objetivo, theta_0, method="L-BFGS-B", jac=True,
+                      options={"maxiter": maxiter, "ftol": 1e-9})
+    fuerza, ventaja, delta = desempaquetar(ajuste.x)
+    predictor = cls(equipos, fuerza, ventaja, delta)
+    predictor.convergencia = {"ok": bool(ajuste.success), "iteraciones": int(ajuste.nit), "mensaje": str(ajuste.message)}
+    return predictor
+
+  def _fuerzas(self, lote):
+    home = np.array([self.indice.get(int(t), self.n) for t in lote.tabla["home_id"]], dtype=int)
+    away = np.array([self.indice.get(int(t), self.n) for t in lote.tabla["away_id"]], dtype=int)
+    return home, away, np.append(self.fuerza, 0.0)
+
+  def probabilidades(self, lote):
+    home, away, fuerza = self._fuerzas(lote)
+    local_0, local_1 = _columna(lote.tabla, "local_0"), _columna(lote.tabla, "local_1")
+    t_h = fuerza[home] + self.ventaja_local * local_0
+    t_a = fuerza[away] + self.ventaja_local * local_1
+    s_h, s_a = np.exp(t_h), np.exp(t_a)
+    e = self.empate * np.exp((t_h + t_a) / 2)
+    denom = s_h + s_a + e
+    return np.stack([s_h / denom, e / denom, s_a / denom], axis=1)
+
+  def predecir(self, lote):
+    home, away, fuerza = self._fuerzas(lote)
+    local_0, local_1 = _columna(lote.tabla, "local_0"), _columna(lote.tabla, "local_1")
+    lambda_0 = np.exp(np.clip(fuerza[home] + self.ventaja_local * local_0, -20, 20))
+    lambda_1 = np.exp(np.clip(fuerza[away] + self.ventaja_local * local_1, -20, 20))
+    return np.stack([lambda_0, lambda_1], axis=1)
+
+  def a_esquema(self):
+    return {"backend": self.nombre, "equipos": self.equipos, "fuerza": self.fuerza.tolist(),
+            "ventaja_local": self.ventaja_local, "empate": self.empate,
+            "convergencia": getattr(self, "convergencia", {})}
+
+  @classmethod
+  def desde_esquema(cls, esquema, carpeta):
+    return cls(esquema["equipos"], esquema["fuerza"], esquema["ventaja_local"], esquema["empate"])
+
+
 PREDICTORES = {
   PredictorPoissonGLM.nombre: PredictorPoissonGLM.desde_esquema,
   PredictorOrdinal.nombre: PredictorOrdinal.desde_esquema,
   PredictorDixonColes.nombre: PredictorDixonColes.desde_esquema,
+  PredictorBradleyTerry.nombre: PredictorBradleyTerry.desde_esquema,
 }
 
 # al importar este modulo se registran sus backends en el contrato de predictores; si el modulo se importa desde

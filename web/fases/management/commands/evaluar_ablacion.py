@@ -9,7 +9,7 @@ import statsmodels.api as sm
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
-from fases.evaluacion import POR_PARTIDO, comparar, evaluar, intervalos_bootstrap, particion
+from fases.evaluacion import comparar, evaluar, particion
 from fases.modelos_estadisticos import _categorias
 
 RAIZ = Path(settings.BASE_DIR).parent

@@ -5,16 +5,22 @@ class partidos(models.Model):
     home = models.CharField(max_length=50)
     score = models.CharField(max_length=6)
     away = models.CharField(max_length=50)
-    agno = models.CharField(max_length=4)
+    agno = models.IntegerField()
     penales = models.CharField(max_length=6, blank=True, default="")
     jugado = models.CharField(max_length=1, default="1")
+
+    class Meta:
+        indexes = [models.Index(fields=['agno'])]
 
 # home,score,away,year
 class fixtures(models.Model):
     home = models.CharField(max_length=50)
     score = models.CharField(max_length=10)
     away = models.CharField(max_length=50)
-    agno = models.CharField(max_length=4)
+    agno = models.IntegerField()
+
+    class Meta:
+        indexes = [models.Index(fields=['agno'])]
 
 # pais,Pts,PJ,PG,PE,PP,GF,GC,Dif,Grupo,agno
 class grupos(models.Model):
@@ -28,21 +34,27 @@ class grupos(models.Model):
     GC = models.CharField(max_length=6)
     Dif = models.CharField(max_length=6)
     Grupo = models.CharField(max_length=50)
-    agno = models.CharField(max_length=6)
+    agno = models.IntegerField()
+
+    class Meta:
+        indexes = [models.Index(fields=['agno'])]
 
 # agno, home, away, score_0, score_1, tournament
 class clasificaciones(models.Model):
-    agno = models.CharField(max_length=6)
+    agno = models.IntegerField()
     home = models.CharField(max_length=50)
     away = models.CharField(max_length=50)
     score_0 = models.CharField(max_length=10)
     score_1 = models.CharField(max_length=10)
     tournament = models.CharField(max_length=50)
 
+    class Meta:
+        indexes = [models.Index(fields=['agno'])]
+
 # pais, agno, gkps, mds, mos, mms, VI, SOT, PKATT, PKATTALLOW (una fila por pais y mundial)
 class proxy_desempegno(models.Model):
     pais = models.CharField(max_length=50)
-    agno = models.CharField(max_length=6, default="")
+    agno = models.IntegerField(null=True)
     gkps = models.CharField(max_length=50)
     mds = models.CharField(max_length=50)
     mos = models.CharField(max_length=50)
@@ -57,10 +69,13 @@ class proxy_desempegno(models.Model):
     pk_real = models.CharField(max_length=1, default="0")
     sot_real = models.CharField(max_length=1, default="0")
 
+    class Meta:
+        indexes = [models.Index(fields=['agno'])]
+
 # fecha, agno, home, away, score_0, score_1, tournament, categoria, neutral (etl/busca_internacionales.py)
 class internacionales(models.Model):
     fecha = models.CharField(max_length=10)
-    agno = models.CharField(max_length=4)
+    agno = models.IntegerField()
     home = models.CharField(max_length=50)
     away = models.CharField(max_length=50)
     score_0 = models.CharField(max_length=3)
@@ -68,3 +83,16 @@ class internacionales(models.Model):
     tournament = models.CharField(max_length=80)
     categoria = models.CharField(max_length=30)
     neutral = models.CharField(max_length=1)
+
+    class Meta:
+        indexes = [models.Index(fields=['agno'])]
+
+# fecha,pais,posicion,puntos (ranking FIFA, etl/busca_fifa_ranking.py)
+class rankingfifa(models.Model):
+    fecha = models.DateField()
+    pais = models.CharField(max_length=50)
+    posicion = models.SmallIntegerField()
+    puntos = models.FloatField()
+
+    class Meta:
+        indexes = [models.Index(fields=['pais', 'fecha'])]

@@ -1,5 +1,6 @@
 import json
 import tempfile
+from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
@@ -12,7 +13,7 @@ from .modulo import ALL_METRICS, BASE_METRICS, COLS_MODELO_POR_EQUIPO, METRICAS_
 from .ensamble import PredictorEnsamble
 from .evaluacion import comparar, decision_acierto, decision_rps, ece, intervalos_bootstrap, metricas, metricas_por_partido, metricas_probabilidad, particion, probabilidades_deterministas, tabla_calibracion
 from .modelos_arboles import PredictorLightGBMMulticlase, PredictorLightGBMPoisson, PredictorRandomForest
-from .modelos_estadisticos import PredictorDixonColes, PredictorOrdinal, PredictorPoissonGLM
+from .modelos_estadisticos import PredictorBradleyTerry, PredictorDixonColes, PredictorOrdinal, PredictorPoissonGLM
 from .modelos_jerarquicos import PredictorJerarquico
 from .predictores import Lote, PredictorElo, PredictorEmpate, PredictorKeras, PredictorMasPuntos, PredictorMedias, cargar_predictor, guardar_predictor, lote_desde_entrada
 from .xg_rolling import construir_rolling
@@ -302,6 +303,20 @@ class PredictoresTests(SimpleTestCase):
     # la app la puede pasar tal cual a un predictor
     self.assertEqual(PredictorMedias(1.5, 1.0).predecir(lote_desde_entrada(X)).shape, (2, 2))
 
+  def test_predecir_lote_vacio_no_llama_a_keras(self):
+    # robustez: un lote vacío no debe llegar a model.predict (Keras 3 lanza UnboundLocalError con input vacío)
+    class Stub:
+      def predict(self, *a, **k):
+        raise AssertionError("no debe predecir un lote vacío")
+    predictor = PredictorKeras(Stub(), {"media": [], "desv": [], "n_paises": 10, "paises": []})
+    secuencias = {
+      "seq_0": np.zeros((0, 1, 1)), "seq_1": np.zeros((0, 1, 1)),
+      "mascara_0": np.zeros((0, 1)), "mascara_1": np.zeros((0, 1)),
+      "id_0": np.zeros((0, 1)), "id_1": np.zeros((0, 1)),
+    }
+    salida = predictor.predecir(Lote(pd.DataFrame(), secuencias=secuencias))
+    self.assertEqual(salida.shape, (0, 2))
+
 
 class ValorNeutroTests(SimpleTestCase):
   """A-01: apagar una metrica no puede romper la prediccion; el hueco se rellena con la media del entrenamiento"""
@@ -527,6 +542,22 @@ class ModelosEstadisticosTests(SimpleTestCase):
       cargado, _ = cargar_predictor(carpeta)
       np.testing.assert_allclose(cargado.probabilidades(Lote(self.ds)), probs, rtol=1e-10)
       np.testing.assert_allclose(cargado.predecir(Lote(self.ds)), p.predecir(Lote(self.ds)), rtol=1e-10)
+
+  def test_bradley_terry_contrato_y_roundtrip(self):
+    p = PredictorBradleyTerry.entrenar(self.ds)
+    probs = p.probabilidades(Lote(self.ds))
+    self.assertEqual(probs.shape, (len(self.ds), 3))
+    np.testing.assert_allclose(probs.sum(axis=1), 1, rtol=1e-10)
+    self.assertTrue((probs >= 0).all())
+    salida = p.predecir(Lote(self.ds))
+    self.assertEqual(salida.shape, (len(self.ds), 2))
+    self.assertTrue((salida > 0).all())
+    with tempfile.TemporaryDirectory() as carpeta:
+      guardar_predictor(p, carpeta)
+      cargado, esquema = cargar_predictor(carpeta)
+      self.assertEqual(esquema["backend"], "bradley_terry")
+      np.testing.assert_allclose(cargado.probabilidades(Lote(self.ds)), probs, rtol=1e-10)
+      np.testing.assert_allclose(cargado.predecir(Lote(self.ds)), salida, rtol=1e-10)
 
   def test_dixon_coles_probabilidades_y_roundtrip(self):
     p = PredictorDixonColes.entrenar(self.ds, xi=0.1)
@@ -941,7 +972,7 @@ class DesempatesRealesTests(SimpleTestCase):
     self.assertEqual(marcador_real(reales, 6, 7), (0, 1))
 
   def test_repeticion_decide_el_partido_original(self):
-    from .modulo import func_prediccion_orden
+    from .simulacion import func_prediccion_orden
     objs = func_prediccion_orden.__new__(func_prediccion_orden)
     objs.dic_matches = {f"Match {i}": {"ganador": None, "perdedor": None} for i in (12, 13)}
     objs.registrar_partido("Match 12", 6, 7, empate=True)    # 1:1: provisoriamente pasa el visitante
@@ -1158,6 +1189,55 @@ class MontecarloTests(SimpleTestCase):
     self.assertEqual(len(orden), 16)
     self.assertEqual(len(set(orden)), 16)
 
+  def _partidos_grupo(self, base, n_equipos):
+    equipos = list(range(base, base + n_equipos))
+    return [(a, b) for i, a in enumerate(equipos) for b in equipos[i + 1:]]
+
+  def test_orden_1934_38_ignora_replays(self):
+    from .montecarlo import _orden_1934_38
+    df = pd.DataFrame({"home": [0, 2, 4, 6, 8, 10, 12, 14, 0], "away": [1, 3, 5, 7, 9, 11, 13, 15, 1]})
+    orden = _orden_1934_38(df)
+    self.assertEqual(len(orden), 16)
+    self.assertEqual(len(set(orden)), 16)
+
+  def test_simular_1950_favorito(self):
+    from .montecarlo import _simular_1950
+    lambdas = self.favorito(16)
+    grupos = {"Grupo " + str(i + 1): self._partidos_grupo(4 * i, 4) for i in range(4)}
+    rng = np.random.default_rng(0)
+    campeones = {}
+    for _ in range(400):
+      c, f, s = _simular_1950(rng, lambdas, grupos)
+      campeones[c] = campeones.get(c, 0) + 1
+    self.assertGreater(campeones.get(0, 0), 0.8 * 400)
+
+  def test_simular_1974_78_corre(self):
+    from .montecarlo import _simular_1974_78
+    lambdas = np.full((16, 16, 2), 1.4)
+    grupos = {"Grupo " + str(i + 1): self._partidos_grupo(4 * i, 4) for i in range(4)}
+    rng = np.random.default_rng(0)
+    c, f, s = _simular_1974_78(rng, lambdas, grupos)
+    self.assertIn(c, range(16))
+    self.assertEqual(len(s), 4)
+
+  def test_simular_1982_corre(self):
+    from .montecarlo import _simular_1982
+    lambdas = np.full((24, 24, 2), 1.4)
+    grupos = {"Grupo " + str(i + 1): self._partidos_grupo(4 * i, 4) for i in range(6)}
+    rng = np.random.default_rng(0)
+    c, f, s = _simular_1982(rng, lambdas, grupos)
+    self.assertIn(c, range(24))
+    self.assertEqual(len(s), 4)
+
+  def test_1954_y_2026_knockout_registrados(self):
+    # G: 1954 entra en el grupo de formatos 4-grupos->cuartos y 2026 soporta knockout (dieciseisavos..final)
+    from .montecarlo import _FASES, _HISTORICOS_8, _KNOCKOUT_2026
+    self.assertIn(1954, _HISTORICOS_8)
+    self.assertEqual(_FASES.get("dieciseisavos"), "dieciseisavos")
+    self.assertEqual(_FASES.get("octavos"), "knockout")
+    self.assertIn("dieciseisavos", _KNOCKOUT_2026)
+    self.assertIn("final", _KNOCKOUT_2026)
+
 
 class CalibracionYTunerTests(SimpleTestCase):
   """D.1/D.2/D.5: calibración, ensamble de semillas y cabeza multitarea (código, sin reentrenar)"""
@@ -1182,6 +1262,26 @@ class CalibracionYTunerTests(SimpleTestCase):
 
     ens = PredictorEnsambleSemillas([Fake(), Fake()])
     self.assertTrue(np.allclose(ens.predecir(np.zeros((5, 2))), np.ones((5, 2))))
+
+  def test_keras_temperatura_en_esquema_y_calibrar(self):
+    from .predictores import PredictorKeras
+
+    class Stub:
+      pass
+
+    p = PredictorKeras(Stub(), {"k": 1, "con_rival": False, "con_contexto": True, "extras": [], "n_paises": 10,
+                                "media": [], "desv": [], "paises": [], "temperatura": 2.5})
+    self.assertEqual(p.temperatura, 2.5)
+    self.assertEqual(p.a_esquema()["config"]["temperatura"], 2.5)
+    # sin temperatura en el config -> 1.0 (sin calibrar)
+    p2 = PredictorKeras(Stub(), {"k": 1, "n_paises": 10, "media": [], "desv": [], "paises": []})
+    self.assertEqual(p2.temperatura, 1.0)
+    # calibrar ajusta T y lo persiste en el esquema
+    probs = np.tile([0.9, 0.05, 0.05], (100, 1))
+    y = np.zeros(100, dtype=int)
+    p2.calibrar(probs, y)
+    self.assertNotEqual(p2.temperatura, 1.0)
+    self.assertEqual(p2.a_esquema()["config"]["temperatura"], p2.temperatura)
 
   def test_construir_modelo_multitarea(self):
     from .predictores import PredictorKeras
@@ -1376,3 +1476,33 @@ class EvaluarJerarquicoTests(SimpleTestCase):
       self.assertIn(campo, vuelta)
     self.assertTrue(vuelta["split_diagnostico"]["diagnostico"])
     self.assertEqual(vuelta["split_diagnostico"]["n_prueba"], 3)
+
+
+class CargarRankingFifaTests(SimpleTestCase):
+  """E.3: parseo del CSV de ranking FIFA (pandas) sin tocar la base de datos"""
+
+  def test_lee_csv_temporal(self):
+    from .management.commands.cargar_ranking_fifa import leer_ranking
+    with tempfile.TemporaryDirectory() as carpeta:
+      ruta = Path(carpeta) / "ranking.csv"
+      ruta.write_text(
+        "fecha,pais,posicion,puntos\n"
+        "1992-12-31,Alemania,1.0,57.0\n"
+        "1993-08-08,Brasil,2.0,58.5\n"
+        "1993-09-23,Argentina,5.0,56.0\n",
+        encoding="utf-8",
+      )
+      filas = leer_ranking(ruta)
+    self.assertEqual(filas, [
+      {"fecha": date(1992, 12, 31), "pais": "Alemania", "posicion": 1, "puntos": 57.0},
+      {"fecha": date(1993, 8, 8), "pais": "Brasil", "posicion": 2, "puntos": 58.5},
+      {"fecha": date(1993, 9, 23), "pais": "Argentina", "posicion": 5, "puntos": 56.0},
+    ])
+
+  def test_ranking_extra_y_fallback_sin_bd(self):
+    from .dataset import EXTRAS, EXTRAS_EN_APP, ranking_por_agno
+    self.assertIn("ranking", EXTRAS)
+    self.assertEqual(EXTRAS["ranking"], ["ranking_{i}"])
+    self.assertIn("ranking", EXTRAS_EN_APP)
+    # sin base de datos (SimpleTestCase) devuelve {} y no lanza
+    self.assertEqual(ranking_por_agno(), {})

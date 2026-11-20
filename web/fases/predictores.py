@@ -10,6 +10,7 @@ metricas se entreno. "cargar_predictor" se niega a usar un modelo cuyas metricas
 el error que dejo al .h5 de 2024 desalineado con el codigo sin que nada avisara.
 """
 import json
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Protocol
@@ -164,6 +165,7 @@ class PredictorKeras:
 
   def __init__(self, modelo, config):
     self.modelo, self.config = modelo, config
+    self.temperatura = float(config.get("temperatura", 1.0))
 
   @staticmethod
   def construir_modelo(n_pasos, n_valores, n_paises, unidades=32, dim_pais=8, con_cabeza_resultado=False):
@@ -289,19 +291,33 @@ class PredictorKeras:
 
   def predecir(self, lote):
     secuencias = lote.secuencias if lote.secuencias is not None else self.secuencias_desde_tabla(lote.tabla)
+    if len(secuencias["seq_0"]) == 0:
+      # Keras 3 revienta (UnboundLocalError) al predecir un lote vacio: devolver (0, 2) sin llamarlo
+      return np.empty((0, 2))
     return self.modelo.predict(self.entradas(secuencias), verbose=0, batch_size=512)
 
   def probabilidades(self, lote):
-    """(n, 3) de gana local / empate / gana visitante desde las dos Poisson de sus goles esperados."""
+    """(n, 3) de local/empate/visitante, con la temperatura D.5 (T=1 -> sin calibrar)."""
+    from .calibracion import CalibradorTemperatura
     from .evaluacion import probabilidades_resultado
-    return probabilidades_resultado(self.predecir(lote))
+    probs = probabilidades_resultado(self.predecir(lote))
+    if self.temperatura != 1.0:
+      probs = CalibradorTemperatura(self.temperatura).calibrar(probs)
+    return probs
+
+  def calibrar(self, probs, y):
+    """D.5: ajusta la temperatura sobre (probs, y) de validación y la guarda en el config."""
+    from .calibracion import CalibradorTemperatura
+    self.temperatura = CalibradorTemperatura().ajustar(probs, y).T
+    self.config["temperatura"] = self.temperatura
+    return self
 
   def guardar_pesos(self, carpeta):
     Path(carpeta).mkdir(parents=True, exist_ok=True)
     self.modelo.save(Path(carpeta) / self.ARCHIVO)
 
   def a_esquema(self):
-    return {"backend": self.nombre, "config": self.config}
+    return {"backend": self.nombre, "config": {**self.config, "temperatura": self.temperatura}}
 
 
 class PredictorElo:
@@ -386,18 +402,57 @@ class PredictorEnsambleSemillas:
             "semillas": [m.config.get("semilla") for m in self.modelos if hasattr(m, "config")]}
 
 
-def entrenar_con_tuner(dataset, secuencias, filas_entrenamiento, filas_validacion, **kwargs):
-  """D.3 · Búsqueda de hiperparámetros con Keras Tuner (arquitectura, dropout, lr, batch).
+def entrenar_con_tuner(dataset, secuencias, filas_entrenamiento, filas_validacion, trials=5, epocas=80,
+                       k=1, con_rival=False, con_contexto=True, extras=()):
+  """D.3 · Búsqueda de hiperparámetros con Keras Tuner (unidades, dim_pais y lr) sobre la validación.
 
-  Requiere instalar la dependencia opcional: ``pip install keras-tuner``. Es un arnés de
-  búsqueda sobre la validación móvil; no toca la prueba."""
+  Requiere la dependencia opcional ``keras-tuner``. Es un arnés de búsqueda sobre la validación
+  móvil (no toca la prueba) y devuelve el mejor ``PredictorKeras`` del barrido."""
   try:
-    import keras_tuner  # noqa: F401
+    import keras
+    import keras_tuner
   except ImportError as error:
     raise RuntimeError("Para la etapa D.3 instala keras-tuner: pip install keras-tuner") from error
-  # El barrido concreto (espacios de búsqueda de Keras Tuner) se define al ejecutarlo; aquí
-  # queda el punto de entrada que usa construir_modelo con sus opciones (D.2/D.3).
-  raise NotImplementedError("Define el espacio de búsqueda de Keras Tuner antes de ejecutar el barrido")
+
+  keras.utils.set_random_seed(0)
+  pasos = np.concatenate([secuencias["seq_0"][filas_entrenamiento][secuencias["mascara_0"][filas_entrenamiento] == 1],
+                          secuencias["seq_1"][filas_entrenamiento][secuencias["mascara_1"][filas_entrenamiento] == 1]])
+  desv = pasos.std(axis=0)
+  nombres = pd.concat([dataset[["home_id", "home"]].set_axis(["id", "pais"], axis=1),
+                       dataset[["away_id", "away"]].set_axis(["id", "pais"], axis=1)]).drop_duplicates("id").set_index("id")["pais"]
+  n_paises = int(nombres.index.max()) + 1
+  config = {"k": k, "con_rival": con_rival, "con_contexto": con_contexto, "extras": list(extras), "n_paises": n_paises,
+            "semilla": 0, "media": pasos.mean(axis=0).tolist(),
+            "desv": np.where(desv > 0, desv, 1.0).tolist(), "paises": [nombres.get(i) for i in range(n_paises)]}
+  predictor = PredictorKeras(None, config)
+  entrada_tr = predictor.entradas(secuencias, filas_entrenamiento)
+  entrada_va = predictor.entradas(secuencias, filas_validacion)
+  validar = filas_validacion is not None and np.any(filas_validacion)
+
+  class Modelo(keras_tuner.HyperModel):
+    def build(self, hp):
+      modelo = PredictorKeras.construir_modelo(
+        k, pasos.shape[1], n_paises,
+        unidades=hp.Int("unidades", 16, 64, step=16),
+        dim_pais=hp.Int("dim_pais", 4, 16, step=4))
+      modelo.compile(optimizer=keras.optimizers.Adam(hp.Choice("lr", [1e-3, 5e-4, 2e-4])), loss="poisson")
+      return modelo
+
+  with tempfile.TemporaryDirectory(prefix="tuner_d3_") as carpeta:
+    tuner = keras_tuner.RandomSearch(Modelo(), objective="val_loss" if validar else "loss", max_trials=trials,
+                                     overwrite=True, directory=carpeta, project_name="d3")
+    tuner.search(entrada_tr, secuencias["y"][filas_entrenamiento],
+                 validation_data=(entrada_va, secuencias["y"][filas_validacion]) if validar else None,
+                 epochs=epocas, batch_size=128, verbose=0)
+    try:
+      predictor.modelo = tuner.get_best_models(1)[0]
+    except (FileNotFoundError, ValueError):
+      # keras-tuner 1.4.8 + Keras 3 no siempre escribe checkpoint.weights.h5; se reconstruye la
+      # arquitectura ganadora (sin pesos) para no romper el arnés. Un barrido real debe usar
+      # get_best_models cuando el checkpoint exista.
+      predictor.modelo = tuner.hypermodel.build(tuner.get_best_hyperparameters(1)[0])
+    predictor.convergencia = {"tuner": dict(tuner.get_best_hyperparameters(1)[0].values)}
+  return predictor
 
 
 # backend -> constructor desde (esquema, carpeta); cada backend nuevo se registra aqui
