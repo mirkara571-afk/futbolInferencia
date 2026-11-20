@@ -325,9 +325,9 @@ The ensemble improves log-loss on 2018+2022 but is **not** better than the Elo o
 
 ### API, Docker and CI (H.1, H.3, H.6)
 
-- **API:** `POST /api/prediccion/` accepts the same `recepcion` as the web and reuses `predecir_recepcion`; `GET /api/schema/` serves the OpenAPI schema and `GET /api/docs/` the Swagger UI. `POST /api/probabilidades/` is reserved for Stage G and currently returns **501**.
+- **API:** `POST /api/prediccion/` accepts the same `recepcion` as the web and reuses `predecir_recepcion`; `GET /api/schema/` serves the OpenAPI schema and `GET /api/docs/` the Swagger UI. `POST /api/probabilidades/` returns the five most likely champions (Stage G Monte Carlo, **200**).
 - **Docker:** `Dockerfile` (Python 3.12, `tensorflow-cpu`, gunicorn, WhiteNoise) and `docker-compose.yml` (PostgreSQL + web). Validate with `docker compose config`; to run: `docker compose up --build`.
-- **CI:** `.github/workflows/ci.yml` runs Ruff (syntax/undefined names), `manage.py check`, and the 60 tests against PostgreSQL 16.
+- **CI:** `.github/workflows/ci.yml` runs Ruff (syntax/undefined names), `manage.py check`, and the 106 tests against PostgreSQL 16.
 - **Not verified here:** the Docker daemon is not available in this environment, so the image was **not built**; `docker compose config` was validated. The GitHub Actions workflow has not run yet. Details in [`docs/especificacion/05-api-docker-ci.md`](docs/especificacion/05-api-docker-ci.md).
 
 ---
@@ -346,7 +346,7 @@ The ensemble improves log-loss on 2018+2022 but is **not** better than the Elo o
 - [x] Stage B: Poisson GLM, Dixon-Coles and ordinal regression, evaluated against the Elo (Poisson GLM leads by a hair, not significant)
 - [x] Stage C: LightGBM and random forest, with variable importance (LightGBM Poisson close second, multiclass/RF worse)
 - [x] Stage F: ensemble, draw decision and the single final look (ensemble best on validation and 2018+2022, not on 2026; no model promoted)
-- [ ] Stage G: Monte Carlo table of the five most likely champions
+- [x] Stage G: Monte Carlo table of the five most likely champions (`montecarlo.py`, all formats 1934–2026, knockout included)
 - [x] Stage H.1: API `POST /api/prediccion/` + Swagger (`/api/docs/`); `/api/probabilidades/` waits for G
 - [x] Stage H.3: `Dockerfile` and `docker-compose.yml` (compose validated; image not built in this environment)
 - [x] Stage H.6: GitHub Actions workflow with Ruff, `manage.py check` and tests (not run yet)

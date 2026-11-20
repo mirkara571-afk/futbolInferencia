@@ -9,7 +9,7 @@ Implementada con Django REST Framework + drf-spectacular.
 | Ruta | Método | Estado |
 |---|---|---|
 | `/api/prediccion/` | POST | Funciona; misma `recepcion` que la web |
-| `/api/probabilidades/` | POST | **501**: pendiente de la Etapa G (Montecarlo de campeones) |
+| `/api/probabilidades/` | POST | **200**: Montecarlo de los 5 campeones (Etapa G) |
 | `/api/schema/` | GET | OpenAPI 3 |
 | `/api/docs/` | GET | Swagger UI |
 
@@ -20,7 +20,7 @@ La lógica no se duplica: `fases/views.py` expone `predecir_recepcion(data)` y t
 ```powershell
 curl -X POST http://127.0.0.1:8000/api/prediccion/ `
   -H "Content-Type: application/json" `
-  -d '{"recepcion":["2018","Fase de Grupos",["Rusia",0,"Arabia Saudita",0,0]]}'
+  -d '{"recepcion":["2018","Fase de Grupos",["Rusia","Arabia Saudita",5,0]]}'
 ```
 
 Respuesta:
@@ -34,7 +34,7 @@ Respuesta:
 }
 ```
 
-**Tests:** payload inválido → 400; predicción con `consulta_general` mockeada → 200; `/api/schema/` → 200; `/api/probabilidades/` → 501; la web sigue devolviendo strings JSON. Total de la suite: **60 tests**.
+**Tests:** payload inválido o incompleto → 400; predicción con `consulta_general` mockeada → 200; `/api/schema/` → 200; `/api/probabilidades/` → 200; la web sigue devolviendo strings JSON. Total de la suite: **106 tests**.
 
 ## 2. Docker (H.3)
 
@@ -65,9 +65,9 @@ docker compose up --build  # no ejecutado aqui
 
 ## 4. Qué falta
 
-- **G:** Montecarlo de los 5 campeones y `/api/probabilidades/` real.
-- **H.2:** refactor de `modulo.py` con la foto de A-06.
-- **H.4:** rediseño de la UI.
+- **G:** ✅ hecho (Montecarlo 1934–2026, incluidos 1954 y las fases knockout de 2026).
+- **H.2:** refactor de `modulo.py` (quitar `import *`, limpiar `ruff`, tipar `models.py`).
+- **H.4:** rediseño de la UI (cuadro eliminatorio visual).
 - **H.5:** bot de Telegram (opcional).
 - **H.7:** LinkedIn/Fiverr y demo pública.
 - **H.3:** construir y desplegar la imagen en un entorno con Docker.
