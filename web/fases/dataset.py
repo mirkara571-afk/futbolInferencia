@@ -54,6 +54,7 @@ def ranking_por_agno():
   if not filas:
     return {}
   df = pd.DataFrame(filas)
+  df["fecha"] = pd.to_datetime(df["fecha"])
   salida = {}
   for agno in range(1992, 2027):
     vigente = df[df["fecha"] <= pd.Timestamp(year=agno, month=7, day=1)]
