@@ -72,4 +72,9 @@ data/*
 !data/proxy_desempegno/
 !data/modelos/
 data/**/*_mo.csv
+# scratch de Selenium/Firefox (E.1): perfiles, cache del driver y logs, nunca se versionan
+data/proxy_desempegno/.scratch/
+data/proxy_desempegno/.selenium_cache/
+data/proxy_desempegno/.tmp/
+data/proxy_desempegno/.firefox_profile/
 *.pdf

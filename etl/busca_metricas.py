@@ -19,6 +19,7 @@ Uso (abre Firefox; fbref bloquea las descargas sin navegador):
     python etl/busca_metricas.py --todos
 """
 import argparse
+import os
 
 from fake_useragent import UserAgent
 
@@ -53,24 +54,40 @@ TABLAS = {
 }
 
 
-def crear_driver():
+def crear_driver(headless=False):
+    # Selenium Manager y geckodriver escriben en %TEMP% y en la cache del usuario;
+    # en este equipo esas rutas dan "Acceso denegado" (os error 5). Se redirigen a
+    # una carpeta escribible del proyecto antes de crear el driver.
+    scratch = PROXY_DESEMPEGNO / ".scratch"
+    cache = scratch / "selenium_cache"
+    tmp = scratch / "tmp"
+    cache.mkdir(parents=True, exist_ok=True)
+    tmp.mkdir(parents=True, exist_ok=True)
+    os.environ["SE_CACHE_PATH"] = str(cache)
+    for nombre in ("TMP", "TEMP", "TMPDIR"):
+        os.environ[nombre] = str(tmp)
+
     useragent = UserAgent()
     options = Options()
+    if headless:
+        # en sesiones sin escritorio (o si Firefox se cierra al abrir ventana)
+        options.add_argument("-headless")
     # 'general.useragent.override' es la preferencia que realmente cambia el user agent en Firefox
     options.set_preference("general.useragent.override", useragent.random)
     # Firefox debe estar instalado; se da la ruta explícita por si el registro no la expone
     firefox = r"C:\Program Files\Mozilla Firefox\firefox.exe"
     if Path(firefox).exists():
         options.binary_location = firefox
-    # geckodriver por defecto crea el perfil en %TEMP% y en algunos equipos falla con
-    # "Unable to write to temporary directory" (salida 64); se usa un perfil escribible
-    # dentro del propio proyecto (data/proxy_desempegno/.firefox_profile).
-    perfil = PROXY_DESEMPEGNO / ".firefox_profile"
+    # geckodriver crea el perfil en una carpeta temporal; se fuerza una escribible
+    # dentro del proyecto y se guarda su log para diagnosticar si vuelve a fallar.
+    perfil = scratch / "firefox_profile"
     perfil.mkdir(parents=True, exist_ok=True)
-    service = Service(service_args=["--profile-root", str(perfil)])
+    service = Service(service_args=["--profile-root", str(perfil)],
+                      log_output=str(scratch / "geckodriver.log"))
     driver = Firefox(options=options, service=service)
     driver.implicitly_wait(7)
-    driver.maximize_window()
+    if not headless:
+        driver.maximize_window()
     return driver
 
 
@@ -164,9 +181,11 @@ def main():
     grupo = parser.add_mutually_exclusive_group(required=True)
     grupo.add_argument("--anio", type=int, choices=MUNDIALES)
     grupo.add_argument("--todos", action="store_true")
+    parser.add_argument("--headless", action="store_true",
+                        help="abre Firefox sin ventana (util si el navegador se cierra al arrancar)")
     args = parser.parse_args()
 
-    driver = crear_driver()
+    driver = crear_driver(headless=args.headless)
     try:
         for year in (MUNDIALES if args.todos else [args.anio]):
             print(get_metricas_abstractas(year, driver))
