@@ -13,7 +13,10 @@ from fases.evaluacion import POR_PARTIDO, comparar, evaluar, intervalos_bootstra
 from fases.predictores import PredictorElo, PredictorEmpate, PredictorKeras, PredictorMasPuntos, PredictorMedias, guardar_predictor
 
 RAIZ = Path(settings.BASE_DIR).parent
-DATASET = RAIZ / "data" / "datasets" / "partidos_features.csv"
+DATASETS = {
+  "eliminatorias": RAIZ / "data" / "datasets" / "partidos_features.csv",
+  "internacionales": RAIZ / "data" / "datasets" / "partidos_features_internacionales.csv",
+}
 RESULTADOS = RAIZ / "experimentos" / "resultados_baseline.json"
 VALIDACION = RAIZ / "experimentos" / "resultados_validacion.json"
 
@@ -88,6 +91,8 @@ class Command(BaseCommand):
   def add_arguments(self, parser):
     parser.add_argument("--solo-validacion", action="store_true",
                         help="Corre solo la validacion movil y guarda experimentos/resultados_validacion.json; no toca la prueba 2018/2022/2026 ni el modelo de la app")
+    parser.add_argument("--ciclo", choices=sorted(DATASETS), default="eliminatorias",
+                        help="dataset de entrenamiento: eliminatorias (la app) o internacionales (D.4)")
 
   def avisar(self, texto):
     self.stdout.write(texto)
@@ -146,9 +151,10 @@ class Command(BaseCommand):
     return {nombre: con_incertidumbre(r, pp, None if nombre == REFERENCIA else referencia) for nombre, (r, pp) in medidos.items()}, referencia
 
   def handle(self, *args, **opciones):
-    if not DATASET.exists():
-      raise CommandError(f"No existe {DATASET}: ejecutar antes 'python manage.py construir_dataset'")
-    ds = pd.read_csv(DATASET)
+    dataset = DATASETS[opciones["ciclo"]]
+    if not dataset.exists():
+      raise CommandError(f"No existe {dataset}: ejecutar antes 'python manage.py construir_dataset'")
+    ds = pd.read_csv(dataset)
     faltan = [c.format(i=0) for e in EXTRAS for c in EXTRAS[e] if c.format(i=0) not in ds]
     if faltan:
       raise CommandError(f"El dataset no tiene el contexto {faltan}: regenerarlo con 'python manage.py construir_dataset'")
@@ -235,7 +241,7 @@ class Command(BaseCommand):
     if opciones.get("solo_validacion"):
       VALIDACION.parent.mkdir(parents=True, exist_ok=True)
       VALIDACION.write_text(json.dumps({
-        "fecha": date.today().isoformat(), "dataset": DATASET.name, "partidos": len(ds), "modo": "solo-validacion",
+        "fecha": date.today().isoformat(), "dataset": dataset.name, "partidos": len(ds), "modo": "solo-validacion",
         "particion": {"seleccion": f"origen movil: valida cada ciclo de {PLIEGUES} entrenando con los anteriores; criterio {CRITERIO}",
                       "prueba": "no ejecutada (--solo-validacion)"},
         "validacion_lineas_base": validacion_lineas_base,
@@ -292,7 +298,7 @@ class Command(BaseCommand):
                       prueba=(resultados_2026 or prueba_resultados)["lstm"]["semillas"][0])
     RESULTADOS.parent.mkdir(parents=True, exist_ok=True)
     RESULTADOS.write_text(json.dumps({
-      "fecha": date.today().isoformat(), "dataset": DATASET.name, "partidos": len(ds),
+      "fecha": date.today().isoformat(), "dataset": dataset.name, "partidos": len(ds),
       "particion": {"seleccion": f"origen movil: valida cada ciclo de {PLIEGUES} entrenando con los anteriores; criterio {CRITERIO}",
                     "prueba": "entrena ciclos <= 2014, prueba mundiales 2018 y 2022 (fase mundial)"},
       "validacion_lineas_base": validacion_lineas_base,
