@@ -1506,3 +1506,47 @@ class CargarRankingFifaTests(SimpleTestCase):
     self.assertIn("ranking", EXTRAS_EN_APP)
     # sin base de datos (SimpleTestCase) devuelve {} y no lanza
     self.assertEqual(ranking_por_agno(), {})
+
+
+class _EloFalso:
+  """Predictor Elo de juguete para el bot: probabilidades y goles fijos"""
+
+  def probabilidades(self, lote):
+    return [[0.50, 0.25, 0.25]]
+
+  def predecir(self, lote):
+    return [[1.5, 0.8]]
+
+
+class BotTelegramTests(SimpleTestCase):
+  """H.5: parseo y formateo de las respuestas del bot (sin token ni red)"""
+
+  def test_respuesta_comandos(self):
+    from .management.commands.bot_telegram import Command
+    bot = Command()
+    self.assertIn("/favoritos", bot._respuesta("/start"))
+    self.assertIn("/favoritos", bot._respuesta("/help"))
+    self.assertIn("/help", bot._respuesta("hola qué tal"))
+    self.assertIn("Uso:", bot._respuesta("/partido"))
+
+  def test_favoritos_formato(self):
+    from .management.commands.bot_telegram import Command
+    bot = Command()
+    with patch("fases.management.commands.bot_telegram.probabilidades_campeon") as mc:
+      mc.return_value = {"year": 2026, "simulaciones": 5000,
+                         "campeones": [{"pais": "Argentina", "campeon": 0.30, "final": 0.10, "semifinal": 0.05}]}
+      texto = bot._favoritos("2026")
+    self.assertIn("Mundial 2026", texto)
+    self.assertIn("Argentina", texto)
+    self.assertIn("30.0%", texto)
+
+  def test_partido_formato(self):
+    from .management.commands.bot_telegram import Command
+    bot = Command()
+    bot.elo = _EloFalso()
+    with patch("fases.management.commands.bot_telegram.contexto_desde_bd") as cb:
+      cb.return_value = {2022: {"elo": {"Brasil": 1900.0, "Argentina": 1850.0}}}
+      texto = bot._partido("Brasil", "Argentina")
+    self.assertIn("Brasil vs Argentina", texto)
+    self.assertIn("empate", texto)
+    self.assertIn("Goles esperados", texto)
