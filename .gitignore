@@ -86,3 +86,12 @@ planVideosHuffman/
 data/modelos/ensamble/
 data/modelos/lstm-ensamble/
 data/modelos/lstm-semilla-*/
+
+# scratch de agentes y artefactos no versionables
+.spec-tmp/
+agents/
+.evo_subagent/
+planVideosHuffman/
+data/modelos/ensamble/
+data/modelos/lstm-ensamble/
+data/modelos/lstm-semilla-*/
