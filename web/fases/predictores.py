@@ -37,6 +37,7 @@ class Lote:
   """
   tabla: pd.DataFrame
   secuencias: Optional[dict] = None
+  historia: Optional[pd.DataFrame] = None
 
 
 # orden de columnas de la salida de "calculo_metricas_0" (COLS_MODELO_POR_EQUIPO por lado)
@@ -261,36 +262,44 @@ class PredictorKeras:
     import keras
     return cls(keras.models.load_model(Path(carpeta) / cls.ARCHIVO), esquema["config"])
 
-  def secuencias_desde_tabla(self, tabla):
-    """
-    ¿QUE HACE?
-    Arma las secuencias de un paso (k = 1) para la simulacion de la app, con la misma "construir_secuencias" del entrenamiento
-
-    ¿COMO LO HACE?
-    0-) Si el modelo usa mas de un paso lanza ValueError: la simulacion no guarda la historia partido a partido de cada equipo
-
-    1-) Traduce los equipos (nombres en "home" y "away") a los ids del entrenamiento (config "paises"); un equipo que no vio va al id de desconocidos
-
-    2-) Llama a "construir_secuencias" con k = 1 y los bloques de la config; (tabla) debe traer ALL_METRICS_0/1 y, con contexto, neutral, categoria, pk_real_0/1 y sot_real_0/1
-    """
-    from .dataset import EXTRAS_EN_APP, construir_secuencias
-
+  def mapear_tabla(self, tabla):
+    """Traduce (home, away) a los ids del entrenamiento y deja goles_0/1 en 0 (lo usa la simulacion)."""
     c = self.config
-    if c["k"] != 1:
-      raise ValueError(f"La simulacion solo arma secuencias de 1 paso y este modelo usa k={c['k']}")
-    faltan = set(c.get("extras", [])) - set(EXTRAS_EN_APP)
-    if faltan:
-      raise ValueError(f"La simulacion no calcula el contexto {sorted(faltan)} que usa este modelo")
     ids = {nombre: i for i, nombre in enumerate(c["paises"]) if nombre is not None}
-    tabla = tabla.assign(
+    return tabla.assign(
       home_id=tabla["home"].map(ids).fillna(c["n_paises"]).astype("int64"),
       away_id=tabla["away"].map(ids).fillna(c["n_paises"]).astype("int64"),
       goles_0=0, goles_1=0,
     )
-    return construir_secuencias(tabla, k=1, con_rival=c["con_rival"], con_contexto=c["con_contexto"], extras=c.get("extras", []))
+
+  def secuencias_desde_tabla(self, tabla, historia=None):
+    """
+    ¿QUE HACE?
+    Arma las secuencias para la simulacion de la app, con la misma "construir_secuencias" del entrenamiento
+
+    ¿COMO LO HACE?
+    0-) Traduce los equipos (nombres en "home" y "away") a los ids del entrenamiento (config "paises"); un equipo que no vio va al id de desconocidos
+
+    1-) Con k = 1 arma un paso por partido; con k > 1 (D.4) concatena el (historia) de partidos previos ya jugados y devuelve las secuencias de los ultimos partidos
+    """
+    from .dataset import EXTRAS_EN_APP, construir_secuencias
+
+    c = self.config
+    faltan = set(c.get("extras", [])) - set(EXTRAS_EN_APP)
+    if faltan:
+      raise ValueError(f"La simulacion no calcula el contexto {sorted(faltan)} que usa este modelo")
+    tabla = self.mapear_tabla(tabla)
+    if c["k"] > 1 and historia is not None and len(historia):
+      combinada = pd.concat([historia, tabla], ignore_index=True)
+      secuencias = construir_secuencias(combinada, k=c["k"], con_rival=c["con_rival"],
+                                        con_contexto=c["con_contexto"], extras=c.get("extras", []))
+      n = len(tabla)
+      return {clave: valor[-n:] for clave, valor in secuencias.items()}
+    return construir_secuencias(tabla, k=c["k"], con_rival=c["con_rival"],
+                                con_contexto=c["con_contexto"], extras=c.get("extras", []))
 
   def predecir(self, lote):
-    secuencias = lote.secuencias if lote.secuencias is not None else self.secuencias_desde_tabla(lote.tabla)
+    secuencias = lote.secuencias if lote.secuencias is not None else self.secuencias_desde_tabla(lote.tabla, lote.historia)
     if len(secuencias["seq_0"]) == 0:
       # Keras 3 revienta (UnboundLocalError) al predecir un lote vacio: devolver (0, 2) sin llamarlo
       return np.empty((0, 2))

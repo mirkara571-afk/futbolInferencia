@@ -202,6 +202,9 @@ def _construir_objs(agno, drop_metricas, metricas_opcionales):
         for marca in ("pk_real", "sot_real")
     }
     modelo = predictor_en_uso(settings.MODEL_PATH / settings.MODEL_DIR)
+    # D.4: con un modelo k>1, sembrar el historial internacional previo para armar las secuencias
+    if getattr(modelo, "config", {}).get("k", 1) > 1:
+      objs.historia = objs._historia_inicial()
     dict_g = objs.grupos_anio_interes(str(agno))
     return objs, df2, df3, dict_g, modelo
 
@@ -235,7 +238,7 @@ def _lambdas_desde_base(objs, equipos, base, modelo, drop_metricas, metricas_opc
     df_pares = pd.DataFrame(pares)
     X = calculo_metricas_0(df_pares, drop_metricas, metricas_opcionales).to_numpy()
     tabla = objs.contexto_simulacion(lote_desde_entrada(X).tabla)
-    Y = modelo.predecir(Lote(tabla))
+    Y = modelo.predecir(Lote(tabla, secuencias=None, historia=getattr(objs, "historia", None)))
 
     n = max(equipos) + 1
     lambdas = np.zeros((n, n, 2))

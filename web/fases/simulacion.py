@@ -349,6 +349,21 @@ class func_prediccion_orden(normali):
     self.n_partidos = n_partidos
     self.drop_metricas = tuple(drop_metricas)
     self.metricas_opcionales = tuple(metricas_opcionales)
+    # D.4: historial de partidos previos por equipo (df cronologico) para armar secuencias k>1; se carga perezoso
+    self.historia = None
+
+  def _historia_inicial(self):
+    """D.4: historial previo de cada equipo (sus partidos internacionales recientes) para armar secuencias k>1.
+
+    Carga el dataset del ciclo internacionales (partidos_features_internacionales.csv) con las mismas
+    columnas que "construir_secuencias"; si no existe, devuelve un df vacio (las secuencias arrancan en cero)."""
+    from pathlib import Path
+
+    from django.conf import settings
+    ruta = Path(settings.BASE_DIR).parent / "data" / "datasets" / "partidos_features_internacionales.csv"
+    if not ruta.exists():
+      return pd.DataFrame()
+    return pd.read_csv(ruta)
 
   def contexto_simulacion(self, tabla):
     """
@@ -409,8 +424,19 @@ class func_prediccion_orden(normali):
       # X viene de "calculo_metricas_0" (esquema fijo); el predictor devuelve (n, 2) goles esperados de home y away
       from .predictores import Lote, lote_desde_entrada
       from .evaluacion import resultado_y_marcador
-      entrada = Lote(self.contexto_simulacion(lote_desde_entrada(X).tabla))
+      tabla = self.contexto_simulacion(lote_desde_entrada(X).tabla)
+      if getattr(model, "config", {}).get("k", 1) > 1:
+        # D.4: secuencias k>1 armadas con el historial partido a partido; se acumula tras cada fase
+        if self.historia is None:
+          self.historia = self._historia_inicial()
+        tabla_mapeada = model.mapear_tabla(tabla)
+        entrada = Lote(tabla, secuencias=None, historia=self.historia)
+      else:
+        tabla_mapeada = None
+        entrada = Lote(tabla)
       Y0 = model.predecir(entrada)
+      if tabla_mapeada is not None:
+        self.historia = pd.concat([self.historia, tabla_mapeada], ignore_index=True)
       resultado, marcador, probs = resultado_y_marcador(Y0, getattr(model, "config", {}).get("umbral_empate", 0.0),
                                                         model.probabilidades(entrada) if hasattr(model, "probabilidades") else None)
       victoria = 2 if isinstance(self.obj0, int) and self.obj0 < 1994 else 3
