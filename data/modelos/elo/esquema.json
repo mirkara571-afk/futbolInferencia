@@ -1,11 +1,11 @@
 {
   "backend": "elo",
   "coef": {
-    "corte_visitante": -0.8073027991326066,
-    "corte_empate": 0.43789551841605545,
-    "pendiente": 0.526311155717442,
-    "base": 0.2060563166027925,
-    "goles_pendiente": 0.19614522946962165
+    "corte_visitante": -0.7590661623058915,
+    "corte_empate": 0.4166957392389886,
+    "pendiente": 0.4564467781719853,
+    "base": 0.29337490794556687,
+    "goles_pendiente": 0.17867261093837403
   },
   "metricas": [
     "PTS",
@@ -24,7 +24,6 @@
     "rate_GF"
   ],
   "version_metricas": 2,
-  "fecha": "2026-10-30",
-  "entrenado_hasta": 2022,
-  "partidos_entrenamiento": 8828
+  "fecha": "2026-11-23",
+  "entrenado_hasta": 2022
 }
