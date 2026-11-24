@@ -93,6 +93,8 @@ class Command(BaseCommand):
                         help="Corre solo la validacion movil y guarda experimentos/resultados_validacion.json; no toca la prueba 2018/2022/2026 ni el modelo de la app")
     parser.add_argument("--ciclo", choices=sorted(DATASETS), default="eliminatorias",
                         help="dataset de entrenamiento: eliminatorias (la app) o internacionales (D.4)")
+    parser.add_argument("--configuracion", default="",
+                        help='JSON {"k","con_rival","con_contexto","extras"} para saltar la seleccion y solo reentrenar')
 
   def avisar(self, texto):
     self.stdout.write(texto)
@@ -186,48 +188,57 @@ class Command(BaseCommand):
         datos["pliegues"][a]["detalle_semilla_0"]["contra_elo"] = {
           m: comparar(base_pp[nombre][a], referencia_pp[a], m) for m in ("log_loss", "rps")}
 
-    # 0.0) largo de la secuencia
-    self.avisar("Seleccion de K (con rival y contexto)")
-    seleccion = [self.configuracion(ds, pliegues, k, True, True)[0] for k in KS]
-    mejor, desv = min(criterio(s) for s in seleccion)
-    k = min(s["k"] for s in seleccion if criterio(s)[0] <= mejor + desv)
-    self.avisar(f"K elegido: {k}")
+    configurada = opciones.get("configuracion", "")
+    if configurada:
+      cfg = json.loads(configurada)
+      k = int(cfg["k"])
+      extras = tuple(cfg.get("extras", []))
+      self.avisar(f"Configuracion fija (sin seleccion): k={k}, rival={cfg['con_rival']}, contexto={cfg['con_contexto']}, extras={list(extras)}")
+      base, predictores_base, sec_base = self.configuracion(ds, pliegues, k, bool(cfg["con_rival"]), bool(cfg["con_contexto"]), extras)
+      seleccion = [base]
+    else:
+      # 0.0) largo de la secuencia
+      self.avisar("Seleccion de K (con rival y contexto)")
+      seleccion = [self.configuracion(ds, pliegues, k, True, True)[0] for k in KS]
+      mejor, desv = min(criterio(s) for s in seleccion)
+      k = min(s["k"] for s in seleccion if criterio(s)[0] <= mejor + desv)
+      self.avisar(f"K elegido: {k}")
 
-    # 0.1) que aporta cada bloque de la entrada
-    self.avisar("Variantes con ese K")
-    variantes = [s for s in seleccion if s["k"] == k]
-    for con_rival, con_contexto in ((False, True), (True, False), (False, False)):
-      variantes.append(self.configuracion(ds, pliegues, k, con_rival, con_contexto)[0])
-    seleccion += variantes[1:]
-    mejor_var = min(variantes, key=lambda v: criterio(v)[0])
-    umbral = sum(criterio(mejor_var))
-    elegida = min((v for v in variantes if criterio(v)[0] <= umbral), key=lambda v: (v["con_rival"] + v["con_contexto"], criterio(v)[0]))
-    self.avisar(f"Variante elegida: rival={elegida['con_rival']}, contexto={elegida['con_contexto']}")
+      # 0.1) que aporta cada bloque de la entrada
+      self.avisar("Variantes con ese K")
+      variantes = [s for s in seleccion if s["k"] == k]
+      for con_rival, con_contexto in ((False, True), (True, False), (False, False)):
+        variantes.append(self.configuracion(ds, pliegues, k, con_rival, con_contexto)[0])
+      seleccion += variantes[1:]
+      mejor_var = min(variantes, key=lambda v: criterio(v)[0])
+      umbral = sum(criterio(mejor_var))
+      elegida = min((v for v in variantes if criterio(v)[0] <= umbral), key=lambda v: (v["con_rival"] + v["con_contexto"], criterio(v)[0]))
+      self.avisar(f"Variante elegida: rival={elegida['con_rival']}, contexto={elegida['con_contexto']}")
 
-    # 0.2) contexto adicional, de a uno
-    self.avisar("Contexto adicional")
-    base = dict(elegida)
-    _, predictores_base, sec_base = self.configuracion(ds, pliegues, k, base["con_rival"], base["con_contexto"])
-    pruebas_extras = []
-    while True:
-      candidatos = [e for e in EXTRAS if e not in base["extras"] and (not pruebas_extras or e in EXTRAS_EN_APP)]
-      ronda = []
-      for e in candidatos:
-        resultado, predictores, sec = self.configuracion(ds, pliegues, k, base["con_rival"], base["con_contexto"], tuple(base["extras"] + [e]))
-        ronda.append((e, resultado, predictores, sec))
-        pruebas_extras.append(resultado)
-      seleccion += [r for _, r, _, _ in ronda]
-      en_app = [x for x in ronda if x[0] in EXTRAS_EN_APP]
-      if not en_app:
-        break
-      e, resultado, predictores, sec = min(en_app, key=lambda x: criterio(x[1])[0])
-      mejora = criterio(base)[0] - criterio(resultado)[0]
-      if mejora <= max(criterio(base)[1], criterio(resultado)[1]):
-        break
-      self.avisar(f"  se agrega {e}: log-loss {criterio(base)[0]:.4f} -> {criterio(resultado)[0]:.4f}")
-      base, predictores_base, sec_base = resultado, predictores, sec
+      # 0.2) contexto adicional, de a uno
+      self.avisar("Contexto adicional")
+      base = dict(elegida)
+      _, predictores_base, sec_base = self.configuracion(ds, pliegues, k, base["con_rival"], base["con_contexto"])
+      pruebas_extras = []
+      while True:
+        candidatos = [e for e in EXTRAS if e not in base["extras"] and (not pruebas_extras or e in EXTRAS_EN_APP)]
+        ronda = []
+        for e in candidatos:
+          resultado, predictores, sec = self.configuracion(ds, pliegues, k, base["con_rival"], base["con_contexto"], tuple(base["extras"] + [e]))
+          ronda.append((e, resultado, predictores, sec))
+          pruebas_extras.append(resultado)
+        seleccion += [r for _, r, _, _ in ronda]
+        en_app = [x for x in ronda if x[0] in EXTRAS_EN_APP]
+        if not en_app:
+          break
+        e, resultado, predictores, sec = min(en_app, key=lambda x: criterio(x[1])[0])
+        mejora = criterio(base)[0] - criterio(resultado)[0]
+        if mejora <= max(criterio(base)[1], criterio(resultado)[1]):
+          break
+        self.avisar(f"  se agrega {e}: log-loss {criterio(base)[0]:.4f} -> {criterio(resultado)[0]:.4f}")
+        base, predictores_base, sec_base = resultado, predictores, sec
     epocas_final = int(round(np.mean(base["epocas"])))
-    self.avisar(f"Configuracion elegida: k={k}, rival={base['con_rival']}, contexto={base['con_contexto']}, extras={base['extras']}, {epocas_final} epocas")
+    self.avisar(f"Configuracion: k={k}, rival={base['con_rival']}, contexto={base['con_contexto']}, extras={base['extras']}, {epocas_final} epocas")
 
     # 0.3) umbral de empate con los modelos del ultimo pliegue (entrenados hasta 2010) sobre el ciclo 2014
     goles_va = ds.loc[va, ["goles_0", "goles_1"]].to_numpy()
