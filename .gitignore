@@ -78,6 +78,8 @@ data/proxy_desempegno/.selenium_cache/
 data/proxy_desempegno/.tmp/
 data/proxy_desempegno/.firefox_profile/
 *.pdf
+# la guía operativa del proyecto sí se versiona
+!docs/guia-operativa.pdf
 # scratch de agentes y artefactos no versionables
 .spec-tmp/
 agents/

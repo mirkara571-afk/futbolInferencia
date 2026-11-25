@@ -35,9 +35,9 @@ class Command(BaseCommand):
     parser.add_argument("--token", default="", help="Token de BotFather (o variable de entorno TELEGRAM_TOKEN)")
 
   def handle(self, *args, **opciones):
-    token = opciones["token"] or os.environ.get("TELEGRAM_TOKEN", "")
+    token = opciones["token"] or os.environ.get("TELEGRAM_TOKEN", "") or getattr(settings, "TELEGRAM_TOKEN", "")
     if not token:
-      raise CommandError("Falta TELEGRAM_TOKEN: crealo con @BotFather (/newbot) y pasalo con --token o la variable TELEGRAM_TOKEN")
+      raise CommandError("Falta TELEGRAM_TOKEN: crealo con @BotFather (/newbot) y pasalo con --token, la variable TELEGRAM_TOKEN o TELEGRAM_TOKEN en web/.env")
     self.elo = self._elo_entrenado()
     self.avisar("Bot activo. Envia /help en Telegram.")
     offset = 0
