@@ -1,9 +1,9 @@
-# 11 · Cierre de sesión (17–18 nov 2026)
+# 11 · Cierre de sesión (17 nov – 25 nov 2026)
 
-**Fecha:** 2026-11-18 · **Rama:** `main` · **Alcance:** verificación de arranque, robustez de la API, H.2, D.1, G, B.4, D.3, E.1/E.3 y docs.
+**Fecha:** 2026-11-25 · **Rama:** `main` · **Alcance:** arranque, robustez de la API, H.2, D.1/D.3/D.4/D.5, G, B.4, E.1/E.3, H.5 y docs.
 
-Resumen del pase de desarrollo local (sin deploy). Se cerraron varios frentes de deuda técnica
-y de producto; al final la suite queda en **107 tests OK** y `ruff` limpio.
+Resumen de los pases de desarrollo local (sin deploy). Se cerraron todos los frentes técnicos y
+de producto pendientes; al final la suite queda en **113 tests OK** y `ruff` limpio.
 
 ## Qué se hizo
 
@@ -64,10 +64,23 @@ y de producto; al final la suite queda en **107 tests OK** y `ruff` limpio.
 - D.3 con arnés funcional; H.4 ya implementado.
 - Sin tocar: deploy, Docker, CI, `.env`, datos, `git push`, `.spec-tmp/` ni `agents/`.
 
-## Pendiente (siguiente pase)
+## Pase 19–25 nov (H.2 / D.4 / D.5 / E.3 / H.5)
 
-- **H.2**: tipar `models.py` (IntegerField + índice) y type hints — la parte más arriesgada.
-- **E.1**: regenerar el dataset con el proxy real y re-medir (`construir_dataset` + reentrenar/evaluar).
-- **D.3/D.4/D.5**: barrido real de Keras Tuner (caro), secuencias k>1, calibración.
-- **E.3**: descargar el CSV de Kaggle y cargar el ranking (manual → luego comando).
-- **H.4**: pulido visual; **H.3/H.5/H.6/H.7**: deploy, bot, CI y publicación (fuera del alcance local).
+- **H.2 cerrado**: `agno`, `score_0/1` y `Pts/PJ/PG/PE/PP/GF/GC` → `IntegerField` con índices
+  (migraciones `0009` y `0010`); `formar_dataset_real` y los filtros ORM ajustados al tipo entero.
+- **D.5**: calibración por temperatura en `PredictorKeras` (`temperatura` + `calibrar`).
+- **E.3 cerrado**: ranking FIFA como extra (`ranking_por_agno` en dataset y app). Sobre el LSTM k=1
+  mejora de forma **significativa** (log-loss −0.0086, IC 95 % [−0.0126, −0.0046], RPS −0.0022,
+  Diebold-Mariano p < 0.001, bootstrap p = 0.001). Sobre el modelo completo k=8+Elo es redundante.
+- **D.4 cerrado**: secuencias **k>1** en la app (historial partido a partido en simulación y
+  Montecarlo) + flags `--ciclo` y `--configuracion` en `evaluar_modelos`. El LSTM **k=8 + Elo sobre
+  internacionales** gana al Elo en el Mundial 2026 (acierto 67.3 % vs 66.3 %; log-loss 0.815 vs
+  0.862; p_dm 0.048) y es el modelo en uso (`MODEL_DIR=lstm-2026-11-23`).
+- **H.5**: bot de Telegram (`manage.py bot_telegram` con `/favoritos` y `/partido`), listo a falta del token.
+
+## Pendiente
+
+- **H.3**: deploy (Docker/gunicorn) — requiere el entorno Docker del usuario.
+- **H.6**: verificar que el workflow de CI salió verde en GitHub Actions (se dispara con cada push).
+- **H.7**: publicar en LinkedIn/Fiverr (textos en `docs/marketing/h7-linkedin-fiverr.md`).
+- **H.5**: correr el bot con el token (`TELEGRAM_TOKEN` en `.env`).

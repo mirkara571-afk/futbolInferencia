@@ -327,7 +327,7 @@ The ensemble improves log-loss on 2018+2022 but is **not** better than the Elo o
 
 - **API:** `POST /api/prediccion/` accepts the same `recepcion` as the web and reuses `predecir_recepcion`; `GET /api/schema/` serves the OpenAPI schema and `GET /api/docs/` the Swagger UI. `POST /api/probabilidades/` returns the five most likely champions (Stage G Monte Carlo, **200**).
 - **Docker:** `Dockerfile` (Python 3.12, `tensorflow-cpu`, gunicorn, WhiteNoise) and `docker-compose.yml` (PostgreSQL + web). Validate with `docker compose config`; to run: `docker compose up --build`.
-- **CI:** `.github/workflows/ci.yml` runs Ruff (syntax/undefined names), `manage.py check`, and the 106 tests against PostgreSQL 16.
+- **CI:** `.github/workflows/ci.yml` runs Ruff (syntax/undefined names), `manage.py check`, and the 113 tests against PostgreSQL 16.
 - **Not verified here:** the Docker daemon is not available in this environment, so the image was **not built**; `docker compose config` was validated. The GitHub Actions workflow has not run yet. Details in [`docs/especificacion/05-api-docker-ci.md`](docs/especificacion/05-api-docker-ci.md).
 
 ---
@@ -339,7 +339,8 @@ The ensemble improves log-loss on 2018+2022 but is **not** better than the Elo o
 - [x] Evaluation against baselines (`evaluar_modelos`, `notebooks/evaluacion.ipynb`)
 - [x] Connect the app to `cargar_predictor` (baseline `PredictorMedias` in `data/modelos/medias/`)
 - [x] Retrain the LSTM with the 14-metric schema and Elo context (`data/modelos/lstm-2026-10-25/`)
-- [x] The app predicts with the LSTM (`MODEL_DIR=lstm-2026-10-25`; `MODEL_DIR=medias` goes back to the baseline)
+- [x] Retrain the LSTM with k=8 sequences on the internationals cycle + Elo (`data/modelos/lstm-2026-11-23/`); beats the Elo in 2026 (log-loss 0.815 vs 0.862, p_dm 0.048)
+- [x] The app predicts with the LSTM (`MODEL_DIR=lstm-2026-11-23`; `MODEL_DIR=medias` goes back to the baseline)
 - [x] Simulate from any stage of every World Cup, including the 1934 / 1938 replays and the 1950 final round
 - [x] 2026 format (48 teams, 12 groups, 8 best third-placed teams) with the official 495-combination FIFA table (`FormatoTorneo`)
 - [x] Stage A: close the probability benchmark (ECE, validation intervals, frozen hold-out, Elo as an artifact)
@@ -350,7 +351,7 @@ The ensemble improves log-loss on 2018+2022 but is **not** better than the Elo o
 - [x] Stage H.1: API `POST /api/prediccion/` + Swagger (`/api/docs/`); `/api/probabilidades/` waits for G
 - [x] Stage H.3: `Dockerfile` and `docker-compose.yml` (compose validated; image not built in this environment)
 - [x] Stage H.6: GitHub Actions workflow with Ruff, `manage.py check` and tests (not run yet)
-- [ ] Stage H.2/H.4/H.5/H.7: refactor, UI, Telegram bot and portfolio
+- [x] Stage H.2/H.4/H.5: refactor+typing, UI and Telegram bot (`bot_telegram`); H.7 (portfolio) pending
 - [x] Clean sheets per World Cup from the scores; shots and penalties imputed until the FBref data is downloaded (`proxy_desempegno`)
 - [ ] Run `etl/busca_metricas.py --todos` to replace the imputed penalties (1998+) and shots on target (2018+) with real data
 - [ ] Split `modulo.py` into smaller modules with tests
@@ -376,7 +377,7 @@ timeline
 
 **futbolInferencia** simula cualquier Mundial (1934 – 2026) desde la fase que elijas: cambias los resultados que quieras y un modelo de series temporales (LSTM) predice el resto del torneo partido a partido. Cada selección arrastra su rendimiento desde las eliminatorias y lo actualiza tras cada partido; los goles predichos se convierten en resultados con un modelo de Poisson.
 
-**Estado:** los datos, la simulación de los 22 Mundiales (incluido 2026) y el dataset de entrenamiento funcionan. La auditoría del 25 de octubre cambió el veredicto: el LSTM con Elo acierta el 51,6 % en 2018+2022 con el umbral de la app y el 63,5 % en 2026; el **Elo puro** obtiene 51,6 % y 66,3 %, así que el LSTM **no demuestra ser mejor**. Las etapas A, B, C y F están implementadas y evaluadas: GLM de Poisson, Dixon-Coles, ordinal, LightGBM, Random Forest y un ensamble. El ensamble gana en validación y en 2018+2022, pero no en 2026; **no se promueve ningún modelo** y el Elo sigue siendo la referencia. La web usa el LSTM (`MODEL_DIR=lstm-2026-10-25`) hasta que G/H y una nueva validación justifiquen otro modelo.
+**Estado:** los datos, la simulación de los 22 Mundiales (incluido 2026) y el dataset de entrenamiento funcionan. El último pase cerró **D.4** (secuencias k>1), **D.5** (calibración), **E.3** (ranking FIFA) y **H.2** (tipado). El ranking FIFA mejora el LSTM k=1 de forma significativa (log-loss −0.0086, Diebold-Mariano p < 0.001). El LSTM **k=8 + Elo sobre internacionales** gana al Elo puro en el Mundial 2026 (acierto 67.3 % vs 66.3 %; log-loss 0.815 vs 0.862; p_dm 0.048) y es el modelo en uso (`MODEL_DIR=lstm-2026-11-23`). Las etapas A–G y H.1/H.2/H.4/H.5 están implementadas; quedan el deploy (H.3), la verificación de CI (H.6) y la publicación (H.7).
 
 **Scraping:** empezó con un script de Selenium por Mundial, adaptado a cada página; cuando Wikipedia cambió su HTML varios dejaron de funcionar. Hoy un solo script (`etl/busca_grupos.py`) usa una regla basada en el contenido (columna «Pts» y título «Grupo…») y reproduce los 20 Mundiales. Detalles y lecciones en *Data collection* (arriba).
 
